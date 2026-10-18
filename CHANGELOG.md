@@ -4,6 +4,14 @@ W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na 
 
 ## [Unreleased]
 
+## [0.0.3-prealpha.7] - 2026-10-18
+
+### Added
+- Dodano zakładkę bezpieczeństwa z możliwością zmiany hasła oraz włączania i wyłączania logowania. Zmiana wymaga weryfikacji obecnego hasła, unieważnia dotychczasowe sesje i odnawia sesję bieżącą.
+
+### Changed
+- Ustabilizowano szerokość przycisku wylogowania i selektora języka dla dłuższych tłumaczeń oraz poprawiono układ etykiet i historii w statystykach.
+
 ## [0.0.3-prealpha.6] - 2026-10-18
 
 ### Fixed

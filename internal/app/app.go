@@ -126,6 +126,7 @@ func (a *App) routes() {
 	a.mux.HandleFunc("/api/setup", a.setup)
 	a.mux.HandleFunc("/api/login", a.login)
 	a.mux.HandleFunc("/api/logout", a.logout)
+	a.mux.HandleFunc("/api/security", a.securitySettings)
 	a.mux.HandleFunc("/api/status", a.protect(a.status))
 	a.mux.HandleFunc("/api/config", a.setupAccess(a.configuration))
 	a.mux.HandleFunc("/api/weather", a.protect(a.weatherStatus))
@@ -306,6 +307,77 @@ func (a *App) logout(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, &http.Cookie{Name: "ultimatewx_session", Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: -1})
 	writeJSON(w, 200, map[string]any{"ok": true})
+}
+func (a *App) securitySettings(w http.ResponseWriter, r *http.Request) {
+	c := a.Config()
+	if r.Method == http.MethodGet {
+		writeJSON(w, http.StatusOK, map[string]any{"authentication_disabled": c.AuthDisabled, "password_configured": c.PasswordHash != ""})
+		return
+	}
+	if r.Method != http.MethodPost {
+		method(w)
+		return
+	}
+	if c.PasswordHash == "" && !c.AuthDisabled {
+		writeError(w, http.StatusForbidden, "complete the initial setup first")
+		return
+	}
+	if !c.AuthDisabled {
+		cookie, err := r.Cookie("ultimatewx_session")
+		if err != nil || !a.validSession(cookie.Value) {
+			writeError(w, http.StatusUnauthorized, "authentication required")
+			return
+		}
+	}
+	var req struct {
+		Action          string `json:"action"`
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if c.AuthDisabled {
+		if req.Action != "enable" {
+			writeError(w, http.StatusBadRequest, "authentication is already disabled")
+			return
+		}
+	} else {
+		if !config.VerifyPassword(c.PasswordHash, req.CurrentPassword) {
+			writeError(w, http.StatusUnauthorized, "current password is incorrect")
+			return
+		}
+		if req.Action != "change" && req.Action != "disable" {
+			writeError(w, http.StatusBadRequest, "unsupported security action")
+			return
+		}
+	}
+	switch req.Action {
+	case "change", "enable":
+		hash, err := config.HashPassword(req.NewPassword)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		c.PasswordHash = hash
+		c.AuthDisabled = false
+	case "disable":
+		c.AuthDisabled = true
+	default:
+		writeError(w, http.StatusBadRequest, "unsupported security action")
+		return
+	}
+	if err := a.setConfig(c); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	a.sessionMu.Lock()
+	a.sessions = make(map[string]time.Time)
+	a.sessionMu.Unlock()
+	if !c.AuthDisabled {
+		a.newSession(w)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "authentication_disabled": c.AuthDisabled})
 }
 func (a *App) status(w http.ResponseWriter, r *http.Request) {
 	c := a.Config()
