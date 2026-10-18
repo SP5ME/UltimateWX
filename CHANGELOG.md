@@ -4,6 +4,12 @@ W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na 
 
 ## [Unreleased]
 
+## [0.0.3-prealpha.2] - 2026-10-18
+
+### Fixed
+- Dodano natychmiastową informację podczas logowania i zapisywania trybu bez logowania, aby kliknięcie nie wyglądało na zignorowane.
+- Po instalacji aktualizacji panel czeka na ponowne uruchomienie usługi i automatycznie przeładowuje interfejs; po przekroczeniu limitu czasu udostępnia ręczne odświeżenie.
+
 ## [0.0.3-prealpha.1] - 2026-10-18
 
 ### Added

@@ -146,6 +146,7 @@ func (a *App) index(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
 	io.WriteString(w, indexHTML)
 }
 func (a *App) security(next http.Handler) http.Handler {
