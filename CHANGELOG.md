@@ -4,6 +4,9 @@ W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na 
 
 ## [Unreleased]
 
+### Fixed
+- Ustawiono właściwy adres repozytorium instalatora i umożliwiono pobieranie najnowszego prerelease, gdy nie ma jeszcze stabilnego wydania.
+
 ## [0.0.1] - 2026-10-18
 
 ### Changed

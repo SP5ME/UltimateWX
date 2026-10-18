@@ -18,10 +18,10 @@ Otwórz `http://127.0.0.1:8080`. Przy pierwszym uruchomieniu przejdź konfigurat
 
 ## Instalacja wydania
 
-Po opublikowaniu projektu na GitHubie instalator będzie dostępny jednym poleceniem (zastąp `OWNER` właścicielem repozytorium):
+Instalator najnowszego wydania można uruchomić jednym poleceniem:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/OWNER/UltimateWX/main/scripts/install.sh | sudo sh
+curl -fsSL https://raw.githubusercontent.com/SP5ME/UltimateWX/main/scripts/install.sh | sudo sh
 ```
 
 Instalator obsługuje Raspberry Pi OS, Ubuntu i Alpine na ARM64 oraz x86-64, korzystając z systemd lub OpenRC. Szczegóły i aktualizacja z panelu: [dokumentacja instalacji](docs/pl/manual.md#instalacja).

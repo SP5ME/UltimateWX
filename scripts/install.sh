@@ -1,12 +1,7 @@
 #!/bin/sh
 set -eu
 
-# Replace this value when publishing under the actual GitHub owner.
-REPOSITORY=${ULTIMATEWX_REPOSITORY:-OWNER/UltimateWX}
-if [ "$REPOSITORY" = "OWNER/UltimateWX" ]; then
-  echo "Set ULTIMATEWX_REPOSITORY to the published OWNER/UltimateWX repository." >&2
-  exit 1
-fi
+REPOSITORY=${ULTIMATEWX_REPOSITORY:-SP5ME/UltimateWX}
 if [ "$(id -u)" -ne 0 ]; then
   echo "Run as root, for example: curl -fsSL <installer-url> | sudo sh" >&2
   exit 1
@@ -33,7 +28,16 @@ for cmd in curl tar sha256sum; do command -v "$cmd" >/dev/null 2>&1 || { echo "M
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT HUP INT TERM
 ASSET="ultimatewx_linux_$ARCH.tar.gz"
-BASE="https://github.com/$REPOSITORY/releases/latest/download"
+VERSION=${ULTIMATEWX_VERSION:-}
+if [ -z "$VERSION" ]; then
+  VERSION=$(curl -fsSL "https://api.github.com/repos/$REPOSITORY/releases?per_page=1" \
+    | sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' | sed -n '1p')
+fi
+if [ -z "$VERSION" ]; then
+  echo "No GitHub release was found for $REPOSITORY." >&2
+  exit 1
+fi
+BASE="https://github.com/$REPOSITORY/releases/download/$VERSION"
 curl -fsSL "$BASE/$ASSET" -o "$TMP/$ASSET"
 curl -fsSL "$BASE/SHA256SUMS" -o "$TMP/SHA256SUMS"
 (cd "$TMP" && grep "  $ASSET\$" SHA256SUMS | sha256sum -c -)
