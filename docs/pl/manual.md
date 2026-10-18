@@ -9,7 +9,7 @@ UltimateWX to lokalna pogodynka dla Linuksa i stacji krótkofalarskiej. Łączy 
 
 ## Instalacja
 
-Instalator wydania obsługuje Raspberry Pi OS, Ubuntu i Alpine Linux na ARM64 oraz x86-64. Po opublikowaniu repozytorium uruchom polecenie z README z uprawnieniami administratora (zwykle przez `sudo`). Instalator sprawdza dystrybucję, architekturę procesora i system usług, pobiera właściwe archiwum, weryfikuje sumę SHA-256, instaluje usługę i włącza autostart. Właściciel repozytorium w poleceniu musi odpowiadać repozytorium na GitHubie.
+Instalator wydania obsługuje Raspberry Pi OS, Ubuntu i Alpine Linux na ARMv7, ARM64 oraz x86-64. Po opublikowaniu repozytorium uruchom polecenie z README z uprawnieniami administratora (zwykle przez `sudo`). Instalator sprawdza dystrybucję, architekturę procesora i system usług, pobiera właściwe archiwum, weryfikuje sumę SHA-256, instaluje usługę i włącza autostart. Właściciel repozytorium w poleceniu musi odpowiadać repozytorium na GitHubie.
 
 Otwórz w sieci lokalnej adres `http://<adres-urzadzenia>:8080`. Przy pierwszym uruchomieniu przejdź konfigurator stacji, a potem wybierz hasło (co najmniej 6 znaków) albo pracę bez logowania. Konfiguracja i historia są przechowywane w `/var/lib/ultimatewx`. Uwzględnij ten katalog w kopii zapasowej — zawiera hash hasła i dane dostępowe do integracji.
 

@@ -20,6 +20,8 @@ jobs:
             goarch: amd64
           - runner: ubuntu-24.04-arm
             goarch: arm64
+          - runner: ubuntu-24.04
+            goarch: arm
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -30,12 +32,19 @@ jobs:
       - run: go test ./...
       - run: go vet ./...
       - name: Build and smoke test native Linux binary
+        if: matrix.goarch != 'arm'
         env:
           GOARCH: ${{ matrix.goarch }}
         run: |
           CGO_ENABLED=0 GOOS=linux go build -trimpath -o ultimatewx ./cmd/ultimatewx
           ./ultimatewx --help
+      - name: Cross-build Linux ARMv7 binary
+        if: matrix.goarch == 'arm'
+        env:
+          GOARM: '7'
+        run: CGO_ENABLED=0 GOOS=linux GOARCH=arm go build -trimpath -o ultimatewx ./cmd/ultimatewx
       - name: Smoke test on Alpine
+        if: matrix.goarch != 'arm'
         run: docker run --rm -v "$PWD/ultimatewx:/tmp/ultimatewx:ro" alpine:latest sh -c 'apk add --no-cache ca-certificates >/dev/null && /tmp/ultimatewx --help'
       - name: Documentation completeness
         run: python3 scripts/check-docs.py
@@ -76,10 +85,16 @@ jobs:
           RELEASE_REPOSITORY: ${{ github.repository }}
         run: |
           mkdir -p dist/release
-          for arch in amd64 arm64; do
-            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath \
-              -ldflags "-s -w -X main.version=$RELEASE_VERSION -X main.repository=$RELEASE_REPOSITORY" \
-              -o dist/release/ultimatewx ./cmd/ultimatewx
+          for arch in amd64 arm64 armv7; do
+            if [ "$arch" = armv7 ]; then
+              CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -trimpath \
+                -ldflags "-s -w -X main.version=$RELEASE_VERSION -X main.repository=$RELEASE_REPOSITORY" \
+                -o dist/release/ultimatewx ./cmd/ultimatewx
+            else
+              CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath \
+                -ldflags "-s -w -X main.version=$RELEASE_VERSION -X main.repository=$RELEASE_REPOSITORY" \
+                -o dist/release/ultimatewx ./cmd/ultimatewx
+            fi
             tar -C "dist/release" -czf "dist/ultimatewx_linux_${arch}.tar.gz" ultimatewx
             rm dist/release/ultimatewx
           done

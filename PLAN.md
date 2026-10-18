@@ -7,7 +7,7 @@ UltimateWX to lekka, konfigurowalna pogodynka krótkofalarska dla małych komput
 ## Założenia platformowe
 
 - Obsługiwane środowiska: Raspberry Pi OS/Raspbian, Ubuntu i Alpine Linux.
-- Docelowo wspierane typowe architektury Linux, w szczególności ARM64 i x86-64; dokładny zakres binariów zostanie potwierdzony przy budowie CI.
+- Wspierane architektury Linux: ARMv7, ARM64 i x86-64.
 - Usługa ma korzystać z systemu init dostępnego na danej dystrybucji, w tym systemd lub OpenRC.
 - Kierunek technologiczny backendu: lekki, modułowy język kompilowany do łatwego wdrożenia na Linuksie (Go jest kandydatem do potwierdzenia na etapie projektu technicznego). Panel WWW powinien być prosty i działać lokalnie.
 
@@ -63,8 +63,8 @@ Panel w sieci lokalnej zabezpiecza hasło ustawiane podczas pierwszego uruchomie
 ## GitHub Actions / CI
 
 - Workflow uruchamiane dla pull requestów, zmian w głównej gałęzi i tagów wydań.
-- Macierz kompilacji i testów dla wspieranych architektur (co najmniej x86-64 i ARM64) oraz sprawdzenie instalacji w środowiskach Ubuntu, Alpine i Raspberry Pi OS w zakresie możliwym w CI.
-- GitHub-hosted Ubuntu runner może obsłużyć x86-64 i ARM64; Alpine/Raspberry Pi OS należy sprawdzać w odpowiednich obrazach/kontenerach lub przez kompilację krzyżową. Rzeczywiste GPIO, wejście/wyjście audio i radio wymagają dodatkowego testu sprzętowego na urządzeniu.
+- Macierz kompilacji i testów dla wspieranych architektur (x86-64, ARM64 i ARMv7) oraz sprawdzenie instalacji w środowiskach Ubuntu, Alpine i Raspberry Pi OS w zakresie możliwym w CI.
+- GitHub-hosted Ubuntu runner obsługuje natywnie x86-64 i ARM64 oraz kompiluje ARMv7 krzyżowo; Alpine/Raspberry Pi OS należy sprawdzać w odpowiednich obrazach/kontenerach. Rzeczywiste GPIO, wejście/wyjście audio i radio wymagają dodatkowego testu sprzętowego na urządzeniu.
 - Przy wydaniu CI buduje pakiety, sumy kontrolne i wykaz zależności/licencji.
 
 ## Licencje i publikacja

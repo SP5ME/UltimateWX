@@ -9,7 +9,7 @@ UltimateWX est un annonceur météo local pour Linux et les stations radioamateu
 
 ## Installation
 
-L’installateur de version prend en charge Raspberry Pi OS, Ubuntu et Alpine Linux en ARM64 et x86-64. Après la publication du dépôt, lancez la commande indiquée dans le README avec les droits administrateur, généralement via `sudo`. L’installateur détecte la distribution, l’architecture et le système de services, télécharge l’archive adaptée, vérifie sa somme SHA-256, installe le service et active le démarrage automatique. Le propriétaire du dépôt dans la commande doit correspondre au projet GitHub publié.
+L’installateur de version prend en charge Raspberry Pi OS, Ubuntu et Alpine Linux en ARMv7, ARM64 et x86-64. Après la publication du dépôt, lancez la commande indiquée dans le README avec les droits administrateur, généralement via `sudo`. L’installateur détecte la distribution, l’architecture et le système de services, télécharge l’archive adaptée, vérifie sa somme SHA-256, installe le service et active le démarrage automatique. Le propriétaire du dépôt dans la commande doit correspondre au projet GitHub publié.
 
 Depuis le réseau local, ouvrez `http://<adresse-appareil>:8080`. Au premier démarrage, suivez d’abord l’assistant de configuration. Vous pourrez ensuite définir un mot de passe d’au moins six caractères ou continuer sans connexion. La configuration et l’historique sont stockés dans `/var/lib/ultimatewx`. Sauvegardez ce répertoire : il contient le hash du mot de passe et les identifiants des intégrations.
 

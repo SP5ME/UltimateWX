@@ -9,7 +9,7 @@ UltimateWX es un locutor meteorológico local para Linux y estaciones de radioaf
 
 ## Instalación
 
-El instalador de versiones admite Raspberry Pi OS, Ubuntu y Alpine Linux en ARM64 y x86-64. Cuando se publique el repositorio, ejecuta el comando del README con permisos de administrador, normalmente mediante `sudo`. El instalador detecta la distribución, la arquitectura y el gestor de servicios, descarga el archivo adecuado, comprueba su suma SHA-256, instala el servicio y activa el inicio automático. El propietario del repositorio del comando debe coincidir con el proyecto publicado en GitHub.
+El instalador de versiones admite Raspberry Pi OS, Ubuntu y Alpine Linux en ARMv7, ARM64 y x86-64. Cuando se publique el repositorio, ejecuta el comando del README con permisos de administrador, normalmente mediante `sudo`. El instalador detecta la distribución, la arquitectura y el gestor de servicios, descarga el archivo adecuado, comprueba su suma SHA-256, instala el servicio y activa el inicio automático. El propietario del repositorio del comando debe coincidir con el proyecto publicado en GitHub.
 
 En la red local, abre `http://<ip-del-dispositivo>:8080`. En el primer inicio, complete primero el asistente de configuración. Después puede establecer una contraseña de al menos seis caracteres o continuar sin iniciar sesión. La configuración y el historial se guardan en `/var/lib/ultimatewx`. Incluye este directorio en las copias de seguridad: contiene el hash de la contraseña y credenciales de integraciones.
 

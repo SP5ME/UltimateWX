@@ -4,8 +4,14 @@ W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na 
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-10-18
+
+### Added
+- Dodano pakiet Linux ARMv7 dla 32-bitowych systemów Raspberry Pi OS i innych zgodnych dystrybucji.
+
 ### Fixed
 - Ustawiono właściwy adres repozytorium instalatora i umożliwiono pobieranie najnowszego prerelease, gdy nie ma jeszcze stabilnego wydania.
+- Zmieniono aktualizator panelu, aby wykrywał najnowsze opublikowane prerelease.
 
 ## [0.0.1] - 2026-10-18
 

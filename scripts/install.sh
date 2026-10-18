@@ -18,7 +18,8 @@ esac
 case "$(uname -m)" in
   x86_64|amd64) ARCH=amd64 ;;
   aarch64|arm64) ARCH=arm64 ;;
-  *) echo "Unsupported architecture: $(uname -m). Supported: x86_64 and aarch64." >&2; exit 1 ;;
+  armv7l|armv7) ARCH=armv7 ;;
+  *) echo "Unsupported architecture: $(uname -m). Supported: x86_64, aarch64 and armv7l." >&2; exit 1 ;;
 esac
 if command -v systemctl >/dev/null 2>&1; then INIT=systemd
 elif command -v rc-update >/dev/null 2>&1; then INIT=openrc

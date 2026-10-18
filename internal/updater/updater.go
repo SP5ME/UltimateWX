@@ -50,25 +50,8 @@ func Check(ctx context.Context, goos, arch string) Status {
 		out.Error = "Aktualizacje wymagają wydania z ustawionym repozytorium projektu."
 		return out
 	}
-	req, e := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/repos/"+Repository+"/releases/latest", nil)
+	r, e := latestRelease(ctx)
 	if e != nil {
-		out.Error = e.Error()
-		return out
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "UltimateWX")
-	resp, e := http.DefaultClient.Do(req)
-	if e != nil {
-		out.Error = e.Error()
-		return out
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		out.Error = fmt.Sprintf("GitHub API: %s", resp.Status)
-		return out
-	}
-	var r Release
-	if e = json.NewDecoder(io.LimitReader(resp.Body, 2<<20)).Decode(&r); e != nil {
 		out.Error = e.Error()
 		return out
 	}
@@ -83,8 +66,37 @@ func Check(ctx context.Context, goos, arch string) Status {
 	}
 	return out
 }
-func normalize(v string) string            { return strings.TrimPrefix(strings.TrimSpace(v), "v") }
-func archiveName(goos, arch string) string { return fmt.Sprintf("ultimatewx_%s_%s.tar.gz", goos, arch) }
+func normalize(v string) string { return strings.TrimPrefix(strings.TrimSpace(v), "v") }
+func latestRelease(ctx context.Context) (Release, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/repos/"+Repository+"/releases?per_page=1", nil)
+	if err != nil {
+		return Release{}, err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "UltimateWX")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return Release{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return Release{}, fmt.Errorf("GitHub API: %s", resp.Status)
+	}
+	var releases []Release
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 2<<20)).Decode(&releases); err != nil {
+		return Release{}, err
+	}
+	if len(releases) == 0 {
+		return Release{}, errors.New("brak opublikowanych wydań")
+	}
+	return releases[0], nil
+}
+func archiveName(goos, arch string) string {
+	if goos == "linux" && arch == "arm" {
+		arch = "armv7"
+	}
+	return fmt.Sprintf("ultimatewx_%s_%s.tar.gz", goos, arch)
+}
 func hasAsset(r Release, name string) bool {
 	for _, a := range r.Assets {
 		if a.Name == name {
@@ -105,19 +117,8 @@ func Apply(ctx context.Context, goos, arch string) error {
 	if Repository == "" {
 		return errors.New("repozytorium aktualizacji nie jest skonfigurowane")
 	}
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/repos/"+Repository+"/releases/latest", nil)
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "UltimateWX")
-	resp, e := http.DefaultClient.Do(req)
+	r, e := latestRelease(ctx)
 	if e != nil {
-		return e
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("GitHub API: %s", resp.Status)
-	}
-	var r Release
-	if e = json.NewDecoder(io.LimitReader(resp.Body, 2<<20)).Decode(&r); e != nil {
 		return e
 	}
 	name := archiveName(goos, arch)
