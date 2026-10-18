@@ -4,6 +4,15 @@ W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na 
 
 ## [Unreleased]
 
+## [0.0.3-prealpha.4] - 2026-10-18
+
+### Added
+- Dodano lokalnie osadzone ikony Material Design Icons do nawigacji i podstawowych działań panelu; panel nie wymaga zewnętrznego CDN.
+
+### Changed
+- Wybór lokalizacji odbywa się w osobnym, większym oknie mapy z przesuwaniem, przybliżaniem kółkiem myszy i gestem szczypania oraz zatwierdzaniem punktu.
+- Przyspieszono weryfikację hasła PBKDF2 na słabszych urządzeniach, zachowując liczbę iteracji i format zapisanych haseł.
+
 ## [0.0.3-prealpha.3] - 2026-10-18
 
 ### Fixed

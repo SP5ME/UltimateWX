@@ -174,9 +174,11 @@ func pbkdf2(password, salt []byte, iterations, length int) []byte {
 		u := m.Sum(nil)
 		t := append([]byte(nil), u...)
 		for i := 1; i < iterations; i++ {
-			m = hmac.New(sha256.New, password)
+			// Reuse the keyed HMAC state and U buffer. Recreating both 180,000
+			// times made password verification unnecessarily slow on Raspberry Pi.
+			m.Reset()
 			m.Write(u)
-			u = m.Sum(nil)
+			u = m.Sum(u[:0])
 			for j := range t {
 				t[j] ^= u[j]
 			}

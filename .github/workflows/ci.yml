@@ -99,13 +99,15 @@ jobs:
             rm dist/release/ultimatewx
           done
           cp LICENSE docs/LICENSING.md dist/
+          mkdir -p dist/LICENSES
+          cp LICENSES/Apache-2.0.txt dist/LICENSES/
           (cd dist && sha256sum ultimatewx_linux_*.tar.gz > SHA256SUMS)
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           PDF_REVIEWED: ${{ steps.translations.outputs.reviewed }}
         run: |
-          assets=(dist/ultimatewx_linux_*.tar.gz dist/SHA256SUMS dist/LICENSE dist/LICENSING.md)
+          assets=(dist/ultimatewx_linux_*.tar.gz dist/SHA256SUMS dist/LICENSE dist/LICENSING.md dist/LICENSES/Apache-2.0.txt)
           if [ "$PDF_REVIEWED" = "true" ]; then
             assets+=(dist/docs/*.pdf)
           fi
