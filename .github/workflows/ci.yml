@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            goarch: amd64
+          - runner: ubuntu-24.04-arm
+            goarch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test ./...
+      - run: go vet ./...
+      - name: Build and smoke test native Linux binary
+        env:
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          CGO_ENABLED=0 GOOS=linux go build -trimpath -o ultimatewx ./cmd/ultimatewx
+          ./ultimatewx --help
+      - name: Smoke test on Alpine
+        run: docker run --rm -v "$PWD/ultimatewx:/tmp/ultimatewx:ro" alpine:latest sh -c 'apk add --no-cache ca-certificates >/dev/null && /tmp/ultimatewx --help'
+      - name: Documentation completeness
+        run: python3 scripts/check-docs.py
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Require corrected translations before PDF publication
+        run: python3 scripts/check-docs.py --release
+      - name: Install PDF build tools
+        run: sudo apt-get update && sudo apt-get install -y pandoc texlive-xetex fonts-noto-core
+      - name: Generate localized PDFs
+        env:
+          REQUIRE_TRANSLATION_REVIEW: '1'
+        run: scripts/build-pdfs.sh
+      - name: Build release archives
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: |
+          mkdir -p dist/release
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath \
+              -ldflags "-s -w -X main.version=$RELEASE_VERSION -X main.repository=$RELEASE_REPOSITORY" \
+              -o dist/release/ultimatewx ./cmd/ultimatewx
+            tar -C "dist/release" -czf "dist/ultimatewx_linux_${arch}.tar.gz" ultimatewx
+            rm dist/release/ultimatewx
+          done
+          cp LICENSE docs/LICENSING.md dist/
+          (cd dist && sha256sum ultimatewx_linux_*.tar.gz > SHA256SUMS)
+          cp dist/docs/*.pdf dist/
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" dist/ultimatewx_linux_*.tar.gz dist/SHA256SUMS dist/LICENSE dist/LICENSING.md dist/*.pdf --generate-notes

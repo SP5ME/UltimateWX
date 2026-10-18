@@ -1,0 +1,3 @@
+# Local Windows launchers; keep these out of GitHub.
+/run-windows.local.ps1
+/run-windows.bat
