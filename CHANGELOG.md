@@ -4,6 +4,14 @@ W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na 
 
 ## [Unreleased]
 
+## [0.0.3-prealpha.5] - 2026-10-18
+
+### Fixed
+- Naprawiono pobieranie katalogu głosów Piper: katalogi językowe są teraz pobierane z obsługą paginacji API Hugging Face zamiast żądania odrzuconego przez limit serwera.
+
+### Added
+- Dodano wyszukiwarkę głosów oraz osobną listę zainstalowanych głosów z oznaczeniem głosu aktualnie używanego.
+
 ## [0.0.3-prealpha.4] - 2026-10-18
 
 ### Added

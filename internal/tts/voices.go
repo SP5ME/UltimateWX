@@ -31,6 +31,7 @@ type Voice struct {
 	Attribution  string `json:"attribution"`
 	ModelCardURL string `json:"model_card_url"`
 	Installed    bool   `json:"installed"`
+	Active       bool   `json:"active,omitempty"`
 	modelPath    string
 	configPath   string
 	cardPath     string
@@ -82,23 +83,40 @@ func (s *Service) Catalog(ctx context.Context, language string) ([]Voice, error)
 	return out, nil
 }
 func (s *Service) fetchCatalog(ctx context.Context, language string) ([]Voice, error) {
-	endpoint := "https://huggingface.co/api/models/" + repository + "/tree/" + revision + "?recursive=true&expand=true&limit=10000"
-	req, e := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if e != nil {
-		return nil, e
-	}
-	req.Header.Set("User-Agent", "UltimateWX/0.1 (open-source amateur radio weather)")
-	resp, e := s.client.Do(req)
-	if e != nil {
-		return nil, e
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("voice catalog returned %s", resp.Status)
-	}
+	// Request only this language and follow the Hub's Link pagination. The
+	// expanded repository-wide listing used to ask for 10,000 entries, which
+	// the Hub rejects (expanded listings are limited to 50 per page).
+	endpoint := "https://huggingface.co/api/models/" + repository + "/tree/" + revision + "/" + language + "?recursive=true&limit=1000"
 	var files []File
-	if e = json.NewDecoder(io.LimitReader(resp.Body, 20<<20)).Decode(&files); e != nil {
-		return nil, e
+	seenPages := make(map[string]bool)
+	for endpoint != "" {
+		if seenPages[endpoint] {
+			return nil, fmt.Errorf("voice catalog pagination repeated a page")
+		}
+		seenPages[endpoint] = true
+		req, e := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+		if e != nil {
+			return nil, e
+		}
+		req.Header.Set("User-Agent", "UltimateWX/0.1 (open-source amateur radio weather)")
+		resp, e := s.client.Do(req)
+		if e != nil {
+			return nil, e
+		}
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+			resp.Body.Close()
+			return nil, fmt.Errorf("voice catalog returned %s: %s", resp.Status, strings.TrimSpace(string(body)))
+		}
+		var page []File
+		e = json.NewDecoder(io.LimitReader(resp.Body, 20<<20)).Decode(&page)
+		link := resp.Header.Get("Link")
+		resp.Body.Close()
+		if e != nil {
+			return nil, e
+		}
+		files = append(files, page...)
+		endpoint = nextPage(link)
 	}
 	byPath := map[string]File{}
 	for _, f := range files {
@@ -156,6 +174,20 @@ func (s *Service) fetchCatalog(ctx context.Context, language string) ([]Voice, e
 		out = append(out, voice)
 	}
 	return out, nil
+}
+
+var nextPageRE = regexp.MustCompile(`<([^>]+)>;\s*rel="next"`)
+
+func nextPage(link string) string {
+	match := nextPageRE.FindStringSubmatch(link)
+	if len(match) != 2 {
+		return ""
+	}
+	u, err := url.Parse(match[1])
+	if err != nil || u.Scheme != "https" || u.Host != "huggingface.co" {
+		return ""
+	}
+	return u.String()
 }
 
 var licenseRE = regexp.MustCompile(`(?im)^\s*license\s*:\s*(CC[- ]BY[- ]4\.0|CC[- ]BY[- ]SA[- ]4\.0|CC0[- ]1\.0|Apache[- ]2\.0|MIT|GPL[- ]3\.0(?:-or-later)?)\s*$`)
@@ -313,5 +345,55 @@ func atomicFile(path string, data []byte, mode os.FileMode) error {
 func (s *Service) Installed(id string) bool {
 	_, e := os.Stat(filepath.Join(s.root, id+".onnx"))
 	return e == nil
+}
+
+func (s *Service) InstalledVoices() ([]Voice, error) {
+	entries, err := os.ReadDir(s.root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []Voice{}, nil
+		}
+		return nil, err
+	}
+	voices := make([]Voice, 0)
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".onnx") {
+			continue
+		}
+		id := strings.TrimSuffix(name, ".onnx")
+		parts := strings.Split(id, "-")
+		voice := Voice{ID: id, Name: id, Installed: true}
+		if len(parts) >= 3 {
+			voice.Language = strings.ToLower(strings.SplitN(parts[0], "_", 2)[0])
+			voice.Name = strings.Join(parts[1:len(parts)-1], "-")
+			voice.Quality = parts[len(parts)-1]
+		}
+		metadata, readErr := os.ReadFile(filepath.Join(s.root, id+".license.json"))
+		if readErr == nil {
+			var details struct {
+				Language     string `json:"language"`
+				Name         string `json:"name"`
+				Quality      string `json:"quality"`
+				License      string `json:"license"`
+				Attribution  string `json:"attribution"`
+				ModelCardURL string `json:"model_card_url"`
+			}
+			if json.Unmarshal(metadata, &details) == nil {
+				if details.Language != "" {
+					voice.Language = details.Language
+				}
+				if details.Name != "" {
+					voice.Name = details.Name
+				}
+				if details.Quality != "" {
+					voice.Quality = details.Quality
+				}
+				voice.License, voice.Attribution, voice.ModelCardURL = details.License, details.Attribution, details.ModelCardURL
+			}
+		}
+		voices = append(voices, voice)
+	}
+	return voices, nil
 }
 func EncodeLangURL(s string) string { return url.QueryEscape(s) }

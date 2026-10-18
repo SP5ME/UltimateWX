@@ -138,6 +138,7 @@ func (a *App) routes() {
 	a.mux.HandleFunc("/api/location/search", a.setupAccess(a.searchLocation))
 	a.mux.HandleFunc("/api/update", a.protect(a.update))
 	a.mux.HandleFunc("/api/tts/catalog", a.protect(a.ttsCatalog))
+	a.mux.HandleFunc("/api/tts/installed", a.protect(a.ttsInstalled))
 	a.mux.HandleFunc("/api/tts/download", a.protect(a.ttsDownload))
 }
 func (a *App) index(w http.ResponseWriter, r *http.Request) {
@@ -403,10 +404,28 @@ func (a *App) ttsCatalog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 502, e.Error())
 		return
 	}
+	activePath := filepath.Clean(a.Config().TTSVoice)
 	for i := range voices {
 		voices[i].Installed = a.voices.Installed(voices[i].ID)
+		voices[i].Active = filepath.Clean(filepath.Join(a.dataDir, "voices", voices[i].ID+".onnx")) == activePath
 	}
 	writeJSON(w, 200, map[string]any{"voices": voices, "source": "Piper voice catalog", "notice": "Sprawdź model card i atrybucję; dostępność zależy od warunków licencji modelu."})
+}
+func (a *App) ttsInstalled(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		method(w)
+		return
+	}
+	voices, err := a.voices.InstalledVoices()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	activePath := filepath.Clean(a.Config().TTSVoice)
+	for i := range voices {
+		voices[i].Active = filepath.Clean(filepath.Join(a.dataDir, "voices", voices[i].ID+".onnx")) == activePath
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"voices": voices})
 }
 func (a *App) ttsDownload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
