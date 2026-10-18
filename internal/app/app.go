@@ -131,6 +131,7 @@ func (a *App) routes() {
 	a.mux.HandleFunc("/api/weather", a.protect(a.weatherStatus))
 	a.mux.HandleFunc("/api/stats", a.protect(a.stats))
 	a.mux.HandleFunc("/api/aprs", a.protect(a.aprsFrames))
+	a.mux.HandleFunc("/api/aprs/test", a.setupAccess(a.testAPRSConnection))
 	a.mux.HandleFunc("/api/audio", a.setupAccess(a.audioDevices))
 	a.mux.HandleFunc("/api/announcement/preview", a.protect(a.preview))
 	a.mux.HandleFunc("/api/announcement/play", a.protect(a.play))
@@ -359,6 +360,34 @@ func (a *App) aprsFrames(w http.ResponseWriter, r *http.Request) {
 	}
 	wx := r.URL.Query().Get("wx_only") == "true"
 	writeJSON(w, 200, map[string]any{"frames": a.history.Frames(limit, wx)})
+}
+func (a *App) testAPRSConnection(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		method(w)
+		return
+	}
+	var request struct {
+		Host string `json:"host"`
+		Port int    `json:"port"`
+	}
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	request.Host = strings.TrimSpace(request.Host)
+	if request.Host == "" || request.Port < 1 || request.Port > 65535 {
+		writeError(w, http.StatusBadRequest, "Enter a valid KISS host and TCP port (1–65535).")
+		return
+	}
+	address := net.JoinHostPort(request.Host, strconv.Itoa(request.Port))
+	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
+	defer cancel()
+	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", address)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, fmt.Sprintf("TCP connection to %s failed: %v", address, err))
+		return
+	}
+	_ = conn.Close()
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "message": "TCP connection established"})
 }
 func (a *App) audioDevices(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, audio.List()) }
 func (a *App) ttsCatalog(w http.ResponseWriter, r *http.Request) {

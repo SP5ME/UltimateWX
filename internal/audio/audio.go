@@ -26,18 +26,51 @@ func list(command string) []Device {
 		return nil
 	}
 	var devices []Device
+	seen := map[string]bool{}
+	var fallback []Device
+	var current *Device
 	for _, line := range strings.Split(string(out), "\n") {
 		trim := strings.TrimSpace(line)
 		if trim == "" {
 			continue
 		}
 		if strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
-			if len(devices) > 0 && devices[len(devices)-1].Description == "" {
-				devices[len(devices)-1].Description = trim
+			if current != nil && current.Description == "" {
+				current.Description = trim
 			}
 			continue
 		}
-		devices = append(devices, Device{Name: trim})
+		if strings.HasPrefix(trim, "plughw:") {
+			if !seen[trim] {
+				devices = append(devices, Device{Name: trim})
+				current = &devices[len(devices)-1]
+				seen[trim] = true
+			} else {
+				current = nil
+			}
+			continue
+		}
+		if trim == "pulse" || trim == "pipewire" || trim == "jack" || trim == "bluealsa" {
+			if !seen[trim] {
+				devices = append(devices, Device{Name: trim})
+				current = &devices[len(devices)-1]
+				seen[trim] = true
+			} else {
+				current = nil
+			}
+			continue
+		}
+		// Keep hardware entries as a fallback for ALSA setups without plughw aliases.
+		if strings.HasPrefix(trim, "hw:") && !seen[trim] {
+			fallback = append(fallback, Device{Name: trim})
+			current = &fallback[len(fallback)-1]
+			seen[trim] = true
+		} else {
+			current = nil
+		}
+	}
+	if len(devices) == 0 {
+		devices = fallback
 	}
 	return devices
 }

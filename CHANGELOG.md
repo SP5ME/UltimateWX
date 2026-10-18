@@ -4,6 +4,16 @@ W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na 
 
 ## [Unreleased]
 
+## [0.0.3-prealpha.1] - 2026-10-18
+
+### Added
+- Dodano test połączenia TCP z hostem i portem Dire Wolf/KISS w konfiguracji źródeł pogody; panel wyświetla stan testu, a komunikat wyjaśnia, że odbiór ramek należy sprawdzić w Monitorze APRS.
+
+### Changed
+- Ograniczono listę urządzeń audio ALSA do bezpośrednich urządzeń kart (`plughw`) i dostępnych serwerów audio, aby nie wyświetlać wielu aliasów tej samej karty. Istniejący wybór pozostaje dostępny po aktualizacji.
+- Przeniesiono mapę, wyszukiwanie lokalizacji, współrzędne i wysokość do drugiej zakładki konfiguracji „Lokalizacja stacji”; pierwszy krok konfiguratora pokazuje teraz dane stacji, a drugi jej położenie.
+- Usprawniono mapę: przesuwanie na bieżąco aktualizuje współrzędne pod celownikiem, widok dopasowuje się po otwarciu zakładki, a błędy pobierania kafelków są widoczne.
+
 ## [0.0.2] - 2026-10-18
 
 ### Added
