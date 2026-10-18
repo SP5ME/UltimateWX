@@ -27,6 +27,7 @@ type Voice struct {
 	Language     string `json:"language"`
 	Name         string `json:"name"`
 	Quality      string `json:"quality"`
+	Gender       string `json:"gender,omitempty"`
 	License      string `json:"license"`
 	Attribution  string `json:"attribution"`
 	ModelCardURL string `json:"model_card_url"`
@@ -123,7 +124,7 @@ func (s *Service) fetchCatalog(ctx context.Context, language string) ([]Voice, e
 		byPath[f.Path] = f
 	}
 	var out []Voice
-	cardCache := map[string]struct{ license, attribution string }{}
+	cardCache := map[string]struct{ license, attribution, gender string }{}
 	for _, f := range files {
 		if !strings.HasSuffix(f.Path, ".onnx") || f.Type != "file" || f.Size <= 0 || f.Size > maxModelSize {
 			continue
@@ -164,13 +165,17 @@ func (s *Service) fetchCatalog(ctx context.Context, language string) ([]Voice, e
 				continue
 			}
 			license, attribution := licenseFor(cardText)
-			licenseInfo = struct{ license, attribution string }{license, attribution}
+			licenseInfo = struct{ license, attribution, gender string }{license, attribution, genderFromCard(cardText)}
 			cardCache[cardPath] = licenseInfo
 		}
 		if licenseInfo.license == "" {
 			continue
 		}
-		voice := Voice{ID: base, Language: lang, Name: strings.Join(parts[1:len(parts)-1], "-"), Quality: parts[len(parts)-1], License: licenseInfo.license, Attribution: licenseInfo.attribution, ModelCardURL: "https://huggingface.co/" + repository + "/blob/" + revision + "/" + card.Path, modelPath: f.Path, configPath: jsonPath, cardPath: cardPath, modelHash: modelHash, configHash: configHash, configSHA1: isSHA1}
+		gender := licenseInfo.gender
+		if gender == "" {
+			gender = genderFromID(base)
+		}
+		voice := Voice{ID: base, Language: lang, Name: strings.Join(parts[1:len(parts)-1], "-"), Quality: parts[len(parts)-1], Gender: gender, License: licenseInfo.license, Attribution: licenseInfo.attribution, ModelCardURL: "https://huggingface.co/" + repository + "/blob/" + revision + "/" + card.Path, modelPath: f.Path, configPath: jsonPath, cardPath: cardPath, modelHash: modelHash, configHash: configHash, configSHA1: isSHA1}
 		out = append(out, voice)
 	}
 	return out, nil
@@ -190,7 +195,29 @@ func nextPage(link string) string {
 	return u.String()
 }
 
-var licenseRE = regexp.MustCompile(`(?im)^\s*license\s*:\s*(CC[- ]BY[- ]4\.0|CC[- ]BY[- ]SA[- ]4\.0|CC0[- ]1\.0|Apache[- ]2\.0|MIT|GPL[- ]3\.0(?:-or-later)?)\s*$`)
+var licenseRE = regexp.MustCompile(`(?im)^\s*(?:[-*]\s*)?license\s*:\s*(CC[- ]BY[- ]4\.0|CC[- ]BY[- ]SA[- ]4\.0|CC0[- ]1\.0|Apache[- ]2\.0|MIT|GPL[- ]3\.0(?:-or-later)?)\s*$`)
+
+var genderRE = regexp.MustCompile(`(?im)^\s*(?:[-*]\s*)?(?:voice\s+)?gender\s*:\s*(female|male)\s*$`)
+
+func genderFromCard(card string) string {
+	match := genderRE.FindStringSubmatch(card)
+	if len(match) == 2 {
+		return strings.ToLower(match[1])
+	}
+	return ""
+}
+
+func genderFromID(id string) string {
+	for _, part := range strings.FieldsFunc(strings.ToLower(id), func(r rune) bool { return !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')) }) {
+		switch part {
+		case "female", "feminine", "woman", "women":
+			return "female"
+		case "male", "masculine", "man", "men":
+			return "male"
+		}
+	}
+	return ""
+}
 
 func licenseFor(card string) (string, string) {
 	match := licenseRE.FindStringSubmatch(card)
@@ -363,7 +390,7 @@ func (s *Service) InstalledVoices() ([]Voice, error) {
 		}
 		id := strings.TrimSuffix(name, ".onnx")
 		parts := strings.Split(id, "-")
-		voice := Voice{ID: id, Name: id, Installed: true}
+		voice := Voice{ID: id, Name: id, Gender: genderFromID(id), Installed: true}
 		if len(parts) >= 3 {
 			voice.Language = strings.ToLower(strings.SplitN(parts[0], "_", 2)[0])
 			voice.Name = strings.Join(parts[1:len(parts)-1], "-")

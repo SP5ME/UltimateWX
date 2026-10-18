@@ -4,6 +4,18 @@ W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na 
 
 ## [Unreleased]
 
+## [0.0.3-prealpha.6] - 2026-10-18
+
+### Fixed
+- Poprawiono odczyt licencji z kart głosów Piper zapisanych jako listy Markdown, dzięki czemu zgodne głosy pojawiają się w katalogu.
+
+### Added
+- Dodano filtrowanie głosów według rodzaju, gdy katalog jednoznacznie podaje tę informację, oraz przycisk testu audio. Test pobiera głos w razie potrzeby bez ustawiania go jako aktywnego.
+- Dodano uporządkowane sekcje konfiguracji czujników dla MQTT, Home Assistant, USB/serial i BME280 GPIO/I²C.
+
+### Changed
+- Przeniesiono katalog głosów do konfiguracji audio, a podgląd i odtwarzanie komunikatu do konfiguracji komunikatu i harmonogramu. Uproszczono główne menu aplikacji.
+
 ## [0.0.3-prealpha.5] - 2026-10-18
 
 ### Fixed

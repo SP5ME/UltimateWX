@@ -140,6 +140,7 @@ func (a *App) routes() {
 	a.mux.HandleFunc("/api/tts/catalog", a.protect(a.ttsCatalog))
 	a.mux.HandleFunc("/api/tts/installed", a.protect(a.ttsInstalled))
 	a.mux.HandleFunc("/api/tts/download", a.protect(a.ttsDownload))
+	a.mux.HandleFunc("/api/tts/test", a.protect(a.ttsTest))
 }
 func (a *App) index(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
@@ -455,6 +456,61 @@ func (a *App) ttsDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": true, "path": path})
+}
+func (a *App) ttsTest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		method(w)
+		return
+	}
+	var req struct {
+		ID string `json:"id"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Minute)
+	defer cancel()
+	voices, err := a.voices.InstalledVoices()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	var voice *tts.Voice
+	for i := range voices {
+		if voices[i].ID == req.ID {
+			voice = &voices[i]
+			break
+		}
+	}
+	downloaded := false
+	if voice == nil {
+		_, downloadErr := a.voices.Download(ctx, req.ID)
+		if downloadErr != nil {
+			writeError(w, http.StatusNotFound, downloadErr.Error())
+			return
+		}
+		voice = &tts.Voice{ID: req.ID, Language: strings.ToLower(strings.SplitN(req.ID, "_", 2)[0])}
+		downloaded = true
+	}
+	c := a.Config()
+	samples := map[string]string{
+		"en": "This is a test of the selected weather station voice.",
+		"pl": "To jest test wybranego głosu stacji pogodowej.",
+		"de": "Dies ist ein Test der ausgewählten Stimme der Wetterstation.",
+		"fr": "Ceci est un test de la voix sélectionnée de la station météo.",
+		"es": "Esta es una prueba de la voz seleccionada de la estación meteorológica.",
+		"it": "Questa è una prova della voce selezionata della stazione meteo.",
+	}
+	sample := samples[voice.Language]
+	if sample == "" {
+		sample = samples["en"]
+	}
+	model := filepath.Join(a.dataDir, "voices", voice.ID+".onnx")
+	if err = audio.Speak(sample, model, c.TTSBinary, c.AudioOutput); err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "downloaded": downloaded})
 }
 func (a *App) preview(w http.ResponseWriter, r *http.Request) {
 	text := a.buildAnnouncement()
