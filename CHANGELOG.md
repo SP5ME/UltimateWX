@@ -4,6 +4,15 @@ W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na 
 
 ## [Unreleased]
 
+## [0.0.3-prealpha.3] - 2026-10-18
+
+### Fixed
+- Przywrócono ładowanie kart statusu po zalogowaniu; błąd podglądu komunikatu nie blokuje wyświetlania pozostałych informacji.
+- Przywrócono nawigację między głównymi sekcjami panelu i przełączanie zakładek konfiguracji.
+- Przełączanie głównych sekcji nie nadpisuje niezapisanych zmian w konfiguracji; wybór języka odświeża również dynamiczne dane.
+- Pierwsze uruchomienie ponownie pyta, czy użytkownik chce skorzystać z konfiguratora.
+- Dodano widoczny stan oczekiwania podczas weryfikacji hasła.
+
 ## [0.0.3-prealpha.2] - 2026-10-18
 
 ### Fixed
