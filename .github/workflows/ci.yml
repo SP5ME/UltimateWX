@@ -144,7 +144,7 @@ jobs:
           )
           text = text.replace(
               "RUN ./build/piper --help",
-              "RUN LD_LIBRARY_PATH=build ./build/piper --help",
+              "RUN ln -sf libpiper_phonemize.so build/libpiper_phonemize.so.1 && LD_LIBRARY_PATH=build ./build/piper --help",
           )
           dockerfile.write_text(text)
           PY
