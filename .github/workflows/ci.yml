@@ -142,6 +142,10 @@ jobs:
               "COPY --from=test /test/piper_*.tar.gz /test/test.wav ./",
               "COPY --from=build /dist/piper_*.tar.gz ./",
           )
+          text = text.replace(
+              "RUN ./build/piper --help",
+              "RUN LD_LIBRARY_PATH=build ./build/piper --help",
+          )
           dockerfile.write_text(text)
           PY
           make -C piper-src docker DOCKER_PLATFORM=linux/arm/v7
