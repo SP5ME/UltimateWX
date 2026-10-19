@@ -9,7 +9,7 @@ UltimateWX to lokalna pogodynka dla Linuksa i stacji krótkofalarskiej. Łączy 
 
 ## Instalacja
 
-Instalator wydania obsługuje Raspberry Pi OS, Ubuntu i Alpine Linux na ARMv7, ARM64 oraz x86-64. Po opublikowaniu repozytorium uruchom polecenie z README z uprawnieniami administratora (zwykle przez `sudo`). Instalator sprawdza dystrybucję, architekturę procesora i system usług, pobiera właściwe archiwum, weryfikuje sumę SHA-256, instaluje usługę i włącza autostart. Właściciel repozytorium w poleceniu musi odpowiadać repozytorium na GitHubie.
+Instalator wydania obsługuje Raspberry Pi OS, Ubuntu i Alpine Linux na ARMv7, ARM64 oraz x86-64. Po opublikowaniu repozytorium uruchom polecenie z README z uprawnieniami administratora (zwykle przez `sudo`). Instalator sprawdza dystrybucję, architekturę procesora i system usług, pobiera właściwe archiwum, weryfikuje sumę SHA-256, instaluje usługę i włącza autostart. Na Raspberry Pi OS/Debian i Ubuntu z x86-64 lub ARM64 instaluje też Piper TTS w osobnym środowisku Pythona. Na Alpine i ARMv7 Piper pozostaje opcjonalny, ponieważ oficjalny pakiet nie udostępnia dla nich zgodnego, gotowego pliku.
 
 Otwórz w sieci lokalnej adres `http://<adres-urzadzenia>:8080`. Przy pierwszym uruchomieniu przejdź konfigurator stacji, a potem wybierz hasło (co najmniej 6 znaków) albo pracę bez logowania. Konfiguracja i historia są przechowywane w `/var/lib/ultimatewx`. Uwzględnij ten katalog w kopii zapasowej — zawiera hash hasła i dane dostępowe do integracji.
 
@@ -18,6 +18,9 @@ Do pracy developerskiej zainstaluj Go 1.23 lub nowsze i uruchom `go run ./cmd/ul
 ## Konfiguracja
 
 Przy pierwszym uruchomieniu konfigurator stacji pojawia się przed ustawieniem dostępu do panelu. Po konfiguracji możesz ustawić hasło albo wybrać pracę bez logowania. Tryb bez hasła pozwala każdej osobie mającej dostęp do panelu korzystać z niego; używaj go tylko w zaufanej sieci lokalnej.
+
+Zakładka **Konfiguracja → Aplikacja** zawiera sprawdzanie i instalowanie aktualizacji oraz eksport i import kopii konfiguracji. Kopia obejmuje ustawienia integracji wraz z hasłami MQTT i tokenami Home Assistant, ale nie zawiera hasła panelu ani historii pomiarów. Przechowuj plik kopii w bezpiecznym miejscu.
+
 
 Zakładka **Status** pokazuje skonfigurowane źródła, urządzenia audio, czas ostatniej aktualizacji pogody online i podgląd komunikatu. **Konfiguracja** jest podzielona na zakładki: Stacja pogodowa, Lokalizacja stacji, Źródła pogody, Czujniki, Audio i głos oraz Komunikat i harmonogram. W zakładce Stacja pogodowa ustaw znak i lokator Maidenhead. Druga zakładka, Lokalizacja stacji, służy do wyszukiwania miejscowości, ustawienia wysokości i wskazania punktu na mapie. Kliknij mapę albo przeciągnij ją tak, by punkt stacji znalazł się pod celownikiem; współrzędne są widoczne w polach i zapisują się ze wspólnym formularzem. Mapa używa kafelków OpenStreetMap i wymaga internetu. W tekstowym bloku komunikatu użyj `<call>` dla znaku i `<loc>` dla lokatora, np. `Tu stacja pogodowa <call> znajdująca się w <loc>.` W harmonogramie dodaj stałe godziny albo cykliczne odtwarzanie co godzinę, np. 5 minut po każdej pełnej godzinie. Zaznacz pozycje, które mają być aktywne. Przełączanie zakładek zachowuje wpisane zmiany; użyj wspólnego przycisku zapisu, aby zapisać formularz. **Statystyki** pokazują zachowane pomiary, ramki i odtworzenia. **Monitor APRS** wyświetla wszystkie zapisane ramki albo tylko WX oraz wyjaśnia, czy ramka WX może zasilać pogodę.
 
@@ -86,7 +89,7 @@ BME280 mierzy ciśnienie stacyjne. UltimateWX osobno wylicza ciśnienie zredukow
 
 **Ramka z bliska nie jest używana.** W monitorze sprawdź pozycję, pola pogody, czas odebrania i odległość. Zwiększ promień tylko wtedy, gdy odpowiada to planowanemu zasięgowi stacji.
 
-**Głos TTS jest niedostępny.** Żaden język ani głos nie jest wybrany domyślnie. W zakładce Głos i komunikat wybierz język, wczytaj katalog i pobierz głos; aplikacja ustawi język komunikatu zgodnie z pobranym głosem. Katalog wymaga Internetu. Aplikacja pokazuje tylko rozpoznane licencje i weryfikuje pliki modelu. Sam Piper musi być zainstalowany i dostępny jako skonfigurowane polecenie; pobrany głos działa lokalnie.
+**Głos TTS jest niedostępny.** Żaden język ani głos nie jest wybrany domyślnie. W zakładce Głos i komunikat wybierz język, wczytaj katalog i pobierz głos; aplikacja ustawi język komunikatu zgodnie z pobranym głosem. Katalog wymaga Internetu. Aplikacja pokazuje tylko rozpoznane licencje i weryfikuje pliki modelu. Instalator Linuksa automatycznie instaluje Piper TTS na obsługiwanych systemach Debian/Raspberry Pi OS i Ubuntu. Na Alpine i ARMv7 Piper trzeba zainstalować osobno i wskazać jego ścieżkę w polu Polecenie Piper. Pobrany głos działa lokalnie.
 
 **Co oznacza szacunek offline?** To prosty wskaźnik trendu ciśnienia, a nie prognoza meteorologiczna. Potrzebuje co najmniej dwóch świeżych pomiarów ciśnienia stacyjnego w odstępie minimum godziny, z ostatnich pięciu godzin. Komunikat nazywa wynik lokalnym szacunkiem.
 

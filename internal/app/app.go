@@ -131,6 +131,7 @@ func (a *App) routes() {
 	a.mux.HandleFunc("/api/security", a.securitySettings)
 	a.mux.HandleFunc("/api/status", a.protect(a.status))
 	a.mux.HandleFunc("/api/config", a.setupAccess(a.configuration))
+	a.mux.HandleFunc("/api/backup", a.protect(a.configurationBackup))
 	a.mux.HandleFunc("/api/weather", a.protect(a.weatherStatus))
 	a.mux.HandleFunc("/api/stats", a.protect(a.stats))
 	a.mux.HandleFunc("/api/aprs", a.protect(a.aprsFrames))
@@ -431,6 +432,61 @@ func (a *App) configuration(w http.ResponseWriter, r *http.Request) {
 		method(w)
 	}
 }
+
+func (a *App) configurationBackup(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		c := a.Config()
+		c.PasswordHash = ""
+		c.AuthDisabled = false
+		backup := struct {
+			Format     string        `json:"format"`
+			Version    int           `json:"version"`
+			ExportedAt time.Time     `json:"exported_at"`
+			Config     config.Config `json:"config"`
+		}{Format: "ultimatewx-config-backup", Version: 1, ExportedAt: time.Now().UTC(), Config: c}
+		data, err := json.MarshalIndent(backup, "", "  ")
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "could not create configuration backup")
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Content-Disposition", `attachment; filename="ultimatewx-config-backup.json"`)
+		w.Header().Set("Cache-Control", "no-store")
+		w.Write(append(data, '\n'))
+	case http.MethodPost:
+		var backup struct {
+			Format     string        `json:"format"`
+			Version    int           `json:"version"`
+			ExportedAt time.Time     `json:"exported_at"`
+			Config     config.Config `json:"config"`
+		}
+		if !decodeJSON(w, r, &backup) {
+			return
+		}
+		if backup.Format != "ultimatewx-config-backup" || backup.Version != 1 {
+			writeError(w, http.StatusBadRequest, "unsupported configuration backup format")
+			return
+		}
+		current := a.Config()
+		backup.Config.PasswordHash = current.PasswordHash
+		backup.Config.AuthDisabled = current.AuthDisabled
+		if backup.Config.MQTTPassword == "" {
+			backup.Config.MQTTPassword = current.MQTTPassword
+		}
+		if backup.Config.HAToken == "" {
+			backup.Config.HAToken = current.HAToken
+		}
+		if err := a.setConfig(backup.Config); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	default:
+		method(w)
+	}
+}
+
 func (a *App) weatherStatus(w http.ResponseWriter, r *http.Request) {
 	a.snapMu.RLock()
 	s := a.snapshot

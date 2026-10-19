@@ -9,7 +9,7 @@ UltimateWX è un annunciatore meteo locale per Linux e stazioni radioamatoriali.
 
 ## Installazione
 
-L’installer delle release supporta Raspberry Pi OS, Ubuntu e Alpine Linux su ARMv7, ARM64 e x86-64. Dopo la pubblicazione del repository, esegui il comando indicato nel README con privilegi amministrativi, normalmente tramite `sudo`. L’installer rileva distribuzione, architettura e sistema init, scarica l’archivio corretto, verifica il checksum SHA-256, installa il servizio e abilita l’avvio automatico. Il proprietario del repository nel comando deve corrispondere al progetto GitHub pubblicato.
+L’installer delle release supporta Raspberry Pi OS, Ubuntu e Alpine Linux su ARMv7, ARM64 e x86-64. Dopo la pubblicazione del repository, esegui il comando indicato nel README con privilegi amministrativi, normalmente tramite `sudo`. L’installer rileva distribuzione, architettura e sistema init, scarica l’archivio corretto, verifica il checksum SHA-256, installa il servizio e abilita l’avvio automatico. Su Raspberry Pi OS/Debian e Ubuntu per x86-64 o ARM64 installa anche Piper TTS in un ambiente Python separato. Piper resta facoltativo su Alpine e ARMv7 perché il pacchetto ufficiale non pubblica un wheel precompilato compatibile con queste piattaforme.
 
 Apri nella rete locale `http://<ip-dispositivo>:8080`. Al primo avvio, completa prima la procedura guidata. Poi puoi impostare una password di almeno sei caratteri oppure continuare senza accesso. Configurazione e cronologia sono conservate in `/var/lib/ultimatewx`. Includi questa cartella nei backup: contiene l’hash della password e le credenziali delle integrazioni.
 
@@ -18,6 +18,9 @@ Per eseguire la versione di sviluppo, installa Go 1.23 o successivo e avvia `go 
 ## Configurazione
 
 Al primo avvio, la procedura guidata appare prima di configurare l’accesso al pannello. Dopo la configurazione puoi impostare una password oppure continuare senza accesso. Senza password, chiunque possa raggiungere il pannello può usarlo; usa questa modalità solo su una rete locale fidata.
+
+La scheda **Configurazione → Applicazione** permette di cercare e installare aggiornamenti, oltre a esportare e importare un backup della configurazione. Il backup include le impostazioni delle integrazioni, comprese le password MQTT e i token di Home Assistant, ma non la password del pannello né lo storico delle misurazioni. Conserva il file di backup in un luogo sicuro.
+
 
 La pagina **Stato** mostra le fonti configurate, i dispositivi audio, l’ultimo aggiornamento meteo online e l’anteprima dell’annuncio. In **Configurazione** imposta posizione, coordinate, quota, unità, lingua, raggio APRS, interfacce, orari e blocchi dell’annuncio. **Statistiche** presenta misure, frame e riproduzioni conservati. Il **Monitor APRS** mostra tutti i frame salvati o solo quelli WX e spiega se ciascun frame può fornire dati meteo.
 
@@ -53,7 +56,7 @@ Per collegare direttamente un BME280 a Raspberry Pi, abilita il profilo I²C, im
 
 **Un frame vicino non viene utilizzato.** Controlla posizione, campi meteo, ora di ricezione e distanza nel monitor. Aumenta il raggio solo se corrisponde alla copertura desiderata.
 
-**La voce TTS non è disponibile.** Nella scheda voce scegli una lingua e carica il catalogo quando Internet è disponibile. L’applicazione mostra solo licenze riconosciute e verifica i file del modello. Piper deve essere installato e disponibile con il comando configurato; le voci scaricate restano locali.
+**La voce TTS non è disponibile.** Nella scheda voce scegli una lingua e carica il catalogo quando Internet è disponibile. L’applicazione mostra solo licenze riconosciute e verifica i file del modello. L’installer Linux installa automaticamente Piper TTS sui sistemi Debian/Raspberry Pi OS e Ubuntu supportati. Su Alpine e ARMv7, installa Piper separatamente e inserisci il percorso dell’eseguibile nel campo Comando Piper. Le voci scaricate restano locali.
 
 **Che cosa significa la stima offline?** È un semplice indicatore della tendenza della pressione, non una previsione meteorologica. Richiede almeno due misure recenti di pressione di stazione distanti almeno un’ora, negli ultimi cinque ore. L’annuncio la identifica come stima locale.
 

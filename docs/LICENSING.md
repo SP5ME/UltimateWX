@@ -17,7 +17,8 @@ UltimateWX: GNU GPL, wersja 3 lub późniejsza (`GPL-3.0-or-later`). Backend uż
 
 ## TTS
 
-- Silnik Piper jest uruchamiany jako osobny program i nie jest dołączany do binariów UltimateWX.
+- Piper TTS (`piper-tts`) jest instalowany jako osobny program z oficjalnego PyPI na Raspberry Pi OS/Debian i Ubuntu dla ARM64 oraz x86-64; nie jest łączony z binarium UltimateWX. Pakiet jest licencjonowany na GPL-3.0-or-later, więc może być używany w projekcie UltimateWX na GPL-3.0-or-later. Instalator przypina wersję 1.8.0. Wymagane pakiety Pythona są instalowane w oddzielnym środowisku; licencje głosów nadal trzeba sprawdzić dla każdego modelu osobno.
+- Automatyczna instalacja pomija Alpine Linux (musl) i ARMv7, ponieważ oficjalne wydanie PyPI nie publikuje dla nich zgodnych kół binarnych (wheels). W tych systemach Piper pozostaje opcjonalny i wymaga osobnej instalacji.
 - Katalog głosów pobiera model card, pokazuje tylko rozpoznane licencje z listy dopuszczonej w kodzie i przy instalacji sprawdza sumy kontrolne modelu oraz konfiguracji.
 - Licencja i atrybucja muszą być sprawdzone dla każdego głosu osobno. Odrzucone lub niejednoznaczne licencje nie są udostępniane w katalogu aplikacji.
 

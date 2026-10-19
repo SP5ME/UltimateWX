@@ -9,7 +9,7 @@ UltimateWX es un locutor meteorológico local para Linux y estaciones de radioaf
 
 ## Instalación
 
-El instalador de versiones admite Raspberry Pi OS, Ubuntu y Alpine Linux en ARMv7, ARM64 y x86-64. Cuando se publique el repositorio, ejecuta el comando del README con permisos de administrador, normalmente mediante `sudo`. El instalador detecta la distribución, la arquitectura y el gestor de servicios, descarga el archivo adecuado, comprueba su suma SHA-256, instala el servicio y activa el inicio automático. El propietario del repositorio del comando debe coincidir con el proyecto publicado en GitHub.
+El instalador de versiones admite Raspberry Pi OS, Ubuntu y Alpine Linux en ARMv7, ARM64 y x86-64. Cuando se publique el repositorio, ejecuta el comando del README con permisos de administrador, normalmente mediante `sudo`. El instalador detecta la distribución, la arquitectura y el gestor de servicios, descarga el archivo adecuado, comprueba su suma SHA-256, instala el servicio y activa el inicio automático. En Raspberry Pi OS/Debian y Ubuntu con x86-64 o ARM64 también instala Piper TTS en un entorno Python aislado. Piper es opcional en Alpine y ARMv7 porque el paquete oficial no publica una rueda precompilada compatible para esas plataformas.
 
 En la red local, abre `http://<ip-del-dispositivo>:8080`. En el primer inicio, complete primero el asistente de configuración. Después puede establecer una contraseña de al menos seis caracteres o continuar sin iniciar sesión. La configuración y el historial se guardan en `/var/lib/ultimatewx`. Incluye este directorio en las copias de seguridad: contiene el hash de la contraseña y credenciales de integraciones.
 
@@ -18,6 +18,9 @@ Para ejecutar la versión de desarrollo, instala Go 1.23 o posterior y ejecuta `
 ## Configuración
 
 En el primer inicio, el asistente de configuración aparece antes de configurar el acceso al panel. Después puede establecer una contraseña o continuar sin iniciar sesión. Sin contraseña, cualquier persona que pueda acceder al panel puede utilizarlo; use este modo solo en una red local de confianza.
+
+La pestaña **Configuración → Aplicación** permite buscar e instalar actualizaciones, además de exportar e importar copias de la configuración. La copia incluye los ajustes de integración, incluidas las contraseñas MQTT y los tokens de Home Assistant, pero no la contraseña del panel ni el historial de mediciones. Guarde el archivo de copia en un lugar seguro.
+
 
 La página **Estado** muestra las fuentes configuradas, los dispositivos de audio, la última actualización meteorológica en línea y una vista previa del anuncio. En **Configuración** puedes definir ubicación, coordenadas, altitud, unidades, idioma, radio APRS, interfaces, horario y bloques del anuncio. **Estadísticas** presenta las mediciones, tramas y reproducciones conservadas. El **Monitor APRS** muestra todas las tramas guardadas o solo las WX e indica si cada una puede aportar datos meteorológicos.
 
@@ -53,7 +56,7 @@ Para conectar directamente un BME280 a Raspberry Pi, activa el perfil I²C, indi
 
 **No se utiliza una trama cercana.** Revisa su posición, campos meteorológicos, hora de recepción y distancia en el monitor. Aumenta el radio solo si coincide con la cobertura prevista.
 
-**La voz TTS no está disponible.** En la pestaña de voz, elige un idioma y carga el catálogo cuando haya Internet. La aplicación solo muestra licencias reconocidas y verifica los archivos del modelo. Piper debe estar instalado y disponible con el comando configurado; las voces descargadas permanecen en el dispositivo.
+**La voz TTS no está disponible.** En la pestaña de voz, elige un idioma y carga el catálogo cuando haya Internet. La aplicación solo muestra licencias reconocidas y verifica los archivos del modelo. El instalador de Linux instala Piper TTS automáticamente en los sistemas Debian/Raspberry Pi OS y Ubuntu compatibles. En Alpine y ARMv7, instala Piper por separado e indica la ruta del ejecutable en el campo Comando de Piper. Las voces descargadas permanecen en el dispositivo.
 
 **¿Qué significa la estimación sin conexión?** Es un indicador sencillo de tendencia de presión, no un pronóstico meteorológico. Necesita al menos dos mediciones recientes de presión de estación separadas por una hora o más, dentro de las últimas cinco horas. El anuncio la denomina estimación local.
 

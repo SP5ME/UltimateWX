@@ -9,7 +9,7 @@ UltimateWX est un annonceur météo local pour Linux et les stations radioamateu
 
 ## Installation
 
-L’installateur de version prend en charge Raspberry Pi OS, Ubuntu et Alpine Linux en ARMv7, ARM64 et x86-64. Après la publication du dépôt, lancez la commande indiquée dans le README avec les droits administrateur, généralement via `sudo`. L’installateur détecte la distribution, l’architecture et le système de services, télécharge l’archive adaptée, vérifie sa somme SHA-256, installe le service et active le démarrage automatique. Le propriétaire du dépôt dans la commande doit correspondre au projet GitHub publié.
+L’installateur de version prend en charge Raspberry Pi OS, Ubuntu et Alpine Linux en ARMv7, ARM64 et x86-64. Après la publication du dépôt, lancez la commande indiquée dans le README avec les droits administrateur, généralement via `sudo`. L’installateur détecte la distribution, l’architecture et le système de services, télécharge l’archive adaptée, vérifie sa somme SHA-256, installe le service et active le démarrage automatique. Sur Raspberry Pi OS/Debian et Ubuntu en x86-64 ou ARM64, il installe aussi Piper TTS dans un environnement Python isolé. Piper reste facultatif sur Alpine et ARMv7, car le paquet officiel ne publie pas de wheel précompilé compatible pour ces plateformes.
 
 Depuis le réseau local, ouvrez `http://<adresse-appareil>:8080`. Au premier démarrage, suivez d’abord l’assistant de configuration. Vous pourrez ensuite définir un mot de passe d’au moins six caractères ou continuer sans connexion. La configuration et l’historique sont stockés dans `/var/lib/ultimatewx`. Sauvegardez ce répertoire : il contient le hash du mot de passe et les identifiants des intégrations.
 
@@ -18,6 +18,9 @@ Pour un lancement de développement, installez Go 1.23 ou une version ultérieur
 ## Configuration
 
 Au premier démarrage, l’assistant de configuration s’affiche avant le choix du mode d’accès au panneau. Ensuite, vous pouvez définir un mot de passe ou continuer sans connexion. Sans mot de passe, toute personne pouvant accéder au panneau peut l’utiliser ; réservez ce mode à un réseau local de confiance.
+
+L’onglet **Configuration → Application** permet de rechercher et d’installer les mises à jour, ainsi que d’exporter et d’importer une sauvegarde de la configuration. Celle-ci contient les paramètres d’intégration, y compris les mots de passe MQTT et les jetons Home Assistant, mais pas le mot de passe du panneau ni l’historique des mesures. Conservez le fichier de sauvegarde en lieu sûr.
+
 
 La page **État** affiche les sources configurées, les périphériques audio, la dernière mise à jour météo en ligne et l’aperçu du message. Dans **Configuration**, réglez l’emplacement, les coordonnées, l’altitude, les unités, la langue, le rayon APRS, les interfaces, les horaires et les blocs d’annonce. **Statistiques** présente les mesures, trames et lectures conservées. Le **Moniteur APRS** affiche toutes les trames enregistrées ou seulement les trames WX, avec la raison de leur admissibilité.
 
@@ -53,7 +56,7 @@ Pour un BME280 directement connecté au Raspberry Pi, activez le profil I²C, in
 
 **Une trame proche n’est pas utilisée.** Vérifiez sa position, ses champs météo, l’heure de réception et sa distance dans le moniteur. N’augmentez le rayon que si cela correspond à la couverture voulue.
 
-**La voix TTS est indisponible.** Dans l’onglet voix, choisissez une langue et chargez le catalogue lorsque l’accès Internet est disponible. L’application ne présente que les licences reconnues et vérifie les fichiers du modèle. Piper doit être installé et disponible sous la commande configurée ; les voix téléchargées restent locales.
+**La voix TTS est indisponible.** Dans l’onglet voix, choisissez une langue et chargez le catalogue lorsque l’accès Internet est disponible. L’application ne présente que les licences reconnues et vérifie les fichiers du modèle. L’installateur Linux installe automatiquement Piper TTS sur les systèmes Debian/Raspberry Pi OS et Ubuntu pris en charge. Sur Alpine et ARMv7, installez Piper séparément et indiquez le chemin de son exécutable dans le champ de commande Piper. Les voix téléchargées restent locales.
 
 **Que signifie l’estimation hors ligne ?** C’est un indicateur simple de tendance de pression, pas une prévision météorologique. Il nécessite au moins deux mesures récentes de pression de station espacées d’une heure minimum, dans les cinq dernières heures. L’annonce la nomme comme estimation locale.
 

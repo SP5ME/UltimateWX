@@ -60,6 +60,47 @@ for group in audio i2c; do
   fi
 done
 
+install_piper() {
+  PIPER_VERSION=1.8.0
+  if command -v piper >/dev/null 2>&1; then
+    echo "Piper is already available: $(command -v piper)."
+    return
+  fi
+
+  case "$DISTRO:$ARCH" in
+    alpine:*|*:armv7)
+      echo "Piper was not installed automatically: no compatible official prebuilt wheel is published for Alpine or ARMv7."
+      return
+      ;;
+  esac
+
+  if ! command -v apt-get >/dev/null 2>&1; then
+    echo "Piper was not installed automatically: apt-get is unavailable."
+    return
+  fi
+  if ! apt-get update || ! DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-venv; then
+    echo "Piper was not installed automatically: Python 3 and venv could not be installed."
+    return
+  fi
+  if ! python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 9))'; then
+    echo "Piper was not installed automatically: Python 3.9 or newer is required."
+    return
+  fi
+
+  PIPER_VENV=/opt/ultimatewx/piper-venv
+  if ! python3 -m venv "$PIPER_VENV" || ! "$PIPER_VENV/bin/python" -m pip install --disable-pip-version-check --only-binary=:all: "piper-tts==$PIPER_VERSION"; then
+    echo "Piper installation failed; UltimateWX will still start, but speech output needs Piper installed separately."
+    return
+  fi
+  if ! ln -sfn "$PIPER_VENV/bin/piper" /usr/local/bin/piper; then
+    echo "Piper was installed at $PIPER_VENV/bin/piper, but its command could not be added to /usr/local/bin."
+    return
+  fi
+  echo "Installed Piper TTS $PIPER_VERSION."
+}
+
+install_piper
+
 if [ "$INIT" = systemd ]; then
   cat >/etc/systemd/system/ultimatewx.service <<'UNIT'
 [Unit]

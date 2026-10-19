@@ -9,7 +9,7 @@ UltimateWX is a local weather announcer for Linux and amateur-radio stations. It
 
 ## Installation
 
-The release installer supports Raspberry Pi OS, Ubuntu and Alpine Linux on ARMv7, ARM64 and x86-64. After the repository is published, run the command shown on the project README as root (normally with `sudo`). The installer checks the distribution, CPU architecture and service manager, downloads the matching archive, verifies its SHA-256 checksum, installs the service and enables autostart. The repository owner in the command must match the published GitHub repository.
+The release installer supports Raspberry Pi OS, Ubuntu and Alpine Linux on ARMv7, ARM64 and x86-64. After the repository is published, run the command shown on the project README as root (normally with `sudo`). The installer checks the distribution, CPU architecture and service manager, downloads the matching archive, verifies its SHA-256 checksum, installs the service and enables autostart. On Raspberry Pi OS/Debian and Ubuntu with x86-64 or ARM64, it also installs Piper TTS in an isolated Python environment. Piper is optional on Alpine and ARMv7 because the official package does not publish a compatible prebuilt wheel for those platforms. The repository owner in the command must match the published GitHub repository.
 
 Open `http://<device-ip>:8080` on the local network. On first launch, complete the station setup wizard, then choose a password (at least six characters) or continue without login. The service stores configuration and history under `/var/lib/ultimatewx`. Keep this directory in backups; it contains the password hash and integration credentials.
 
@@ -18,6 +18,9 @@ For a development run, install Go 1.23 or newer and run `go run ./cmd/ultimatewx
 ## Configuration
 
 On first launch, the station setup wizard appears before panel access is configured. After setup, you can set a password or continue without login. Without a password, anyone who can reach the panel can use it; use this mode only on a trusted local network.
+
+The **Configuration → Application** tab contains update checking and installation, plus configuration backup export and import. The backup includes integration settings, including MQTT passwords and Home Assistant tokens, but excludes the panel password and measurement history. Store the backup file securely.
+
 
 The **Status** page reports the configured sources, audio devices, last online-weather update and announcement preview. **Configuration** is divided into these tabs: Weather station, Station location, Weather sources, Sensors, Audio and voice, and Announcement and schedule. On Weather station, set the callsign and Maidenhead locator. Use the second tab, Station location, to search for a place, set altitude and select a point on the map. Click the map or drag it until the station point is under the crosshair; coordinates are shown in the fields and saved with the shared form. The map uses OpenStreetMap tiles and requires an internet connection. In a text announcement block, use `<call>` for the callsign and `<loc>` for the locator, for example `Weather station <call> located in <loc>.` Add fixed times or an hourly schedule, such as five minutes after every full hour, and enable the entries when the announcement should play. Switching tabs preserves edits; use the shared save button to store the form. Use **Statistics** for retained observations, received frames and playbacks. The **APRS monitor** shows all stored frames or only WX frames and explains whether each WX frame is eligible for weather data.
 
@@ -53,7 +56,7 @@ For a Raspberry Pi BME280, enable the direct I²C profile, set `/dev/i2c-1` and 
 
 **A nearby frame is not used.** Check its position, weather fields, reception time and distance in the APRS monitor. Increase the configured radius only if that matches the station's intended coverage.
 
-**The TTS voice is unavailable.** No language or voice is selected by default. In Voice and announcement, choose a language, load its catalogue and download a voice; the downloaded voice sets the announcement language. Internet access is required for the catalogue. The application shows only recognized licences and verifies model files before installation. Piper itself must be installed and available as the configured command; downloaded voices remain local for offline use.
+**The TTS voice is unavailable.** No language or voice is selected by default. In Voice and announcement, choose a language, load its catalogue and download a voice; the downloaded voice sets the announcement language. Internet access is required for the catalogue. The application shows only recognized licences and verifies model files before installation. The Linux installer installs Piper TTS automatically on supported Debian/Raspberry Pi OS and Ubuntu systems. On Alpine and ARMv7, install Piper separately and set its executable path in the Piper command field. Downloaded voices remain local for offline use.
 
 **What does the offline estimate mean?** It is a simple pressure-trend indicator, not a meteorological forecast. It needs at least two recent measured station-pressure samples at least one hour apart within the last five hours. The announcement names it as a local estimate.
 

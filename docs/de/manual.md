@@ -9,7 +9,7 @@ UltimateWX ist ein lokaler Wetteransager für Linux und Amateurfunkstationen. Di
 
 ## Installation
 
-Der Release-Installer unterstützt Raspberry Pi OS, Ubuntu und Alpine Linux auf ARMv7, ARM64 und x86-64. Nach Veröffentlichung des Repositorys führen Sie den Befehl aus der README mit Administratorrechten aus, üblicherweise mit `sudo`. Der Installer erkennt Distribution, Architektur und Init-System, lädt das passende Archiv herunter, prüft die SHA-256-Prüfsumme, installiert den Dienst und aktiviert den Autostart. Der Repository-Eigentümer im Befehl muss mit dem GitHub-Projekt übereinstimmen.
+Der Release-Installer unterstützt Raspberry Pi OS, Ubuntu und Alpine Linux auf ARMv7, ARM64 und x86-64. Nach Veröffentlichung des Repositorys führen Sie den Befehl aus der README mit Administratorrechten aus, üblicherweise mit `sudo`. Der Installer erkennt Distribution, Architektur und Init-System, lädt das passende Archiv herunter, prüft die SHA-256-Prüfsumme, installiert den Dienst und aktiviert den Autostart. Auf Raspberry Pi OS/Debian und Ubuntu mit x86-64 oder ARM64 installiert er außerdem Piper TTS in einer separaten Python-Umgebung. Auf Alpine und ARMv7 bleibt Piper optional, da das offizielle Paket dafür kein kompatibles vorkompiliertes Wheel anbietet.
 
 Öffnen Sie im lokalen Netzwerk `http://<geraete-ip>:8080`. Führen Sie beim ersten Start zuerst den Einrichtungsassistenten aus. Danach können Sie ein Passwort mit mindestens sechs Zeichen festlegen oder ohne Anmeldung fortfahren. Konfiguration und Verlauf liegen in `/var/lib/ultimatewx`. Sichern Sie dieses Verzeichnis; es enthält den Passwort-Hash und Zugangsdaten für Integrationen.
 
@@ -18,6 +18,9 @@ Für die Entwicklung installieren Sie Go 1.23 oder neuer und starten `go run ./c
 ## Konfiguration
 
 Beim ersten Start erscheint der Einrichtungsassistent vor der Festlegung des Panelzugriffs. Danach können Sie ein Passwort festlegen oder ohne Anmeldung fortfahren. Ohne Passwort kann jeder mit Zugriff auf das Panel es verwenden; nutzen Sie diesen Modus nur in einem vertrauenswürdigen lokalen Netzwerk.
+
+Die Registerkarte **Konfiguration → Anwendung** bietet die Suche und Installation von Updates sowie den Export und Import einer Konfigurationssicherung. Die Sicherung enthält Integrationseinstellungen einschließlich MQTT-Passwörtern und Home-Assistant-Tokens, jedoch weder das Panel-Passwort noch den Messverlauf. Bewahren Sie die Sicherungsdatei sicher auf.
+
 
 Die Seite **Status** zeigt konfigurierte Quellen, Audiogeräte, den Zeitpunkt der letzten Online-Wetteraktualisierung und eine Ansagevorschau. Unter **Konfiguration** stellen Sie Standort, Koordinaten, Höhe, Einheiten, Sprache, APRS-Radius, Schnittstellen, Zeitplan und Ansageblöcke ein. **Statistiken** zeigen gespeicherte Messungen, Frames und Wiedergaben. Der **APRS-Monitor** zeigt alle gespeicherten Frames oder nur WX-Frames und erklärt, ob ein WX-Frame als Wetterquelle gilt.
 
@@ -53,7 +56,7 @@ Für einen BME280 am Raspberry Pi aktivieren Sie das direkte I²C-Profil, tragen
 
 **Ein naher Frame wird nicht verwendet.** Prüfen Sie Position, Wetterfelder, Empfangszeit und Entfernung im Monitor. Erhöhen Sie den Radius nur, wenn er zur beabsichtigten Stationsabdeckung passt.
 
-**Die TTS-Stimme ist nicht verfügbar.** Wählen Sie im Stimmenbereich eine Sprache und laden Sie bei Internetzugang den Katalog. Die Anwendung zeigt nur erkannte Lizenzen an und prüft die Modelldateien. Piper selbst muss installiert und als konfigurierter Befehl verfügbar sein; heruntergeladene Stimmen bleiben lokal.
+**Die TTS-Stimme ist nicht verfügbar.** Wählen Sie im Stimmenbereich eine Sprache und laden Sie bei Internetzugang den Katalog. Die Anwendung zeigt nur erkannte Lizenzen an und prüft die Modelldateien. Der Linux-Installer installiert Piper TTS auf unterstützten Debian/Raspberry Pi OS- und Ubuntu-Systemen automatisch. Auf Alpine und ARMv7 muss Piper separat installiert und der Programmpfad im Feld „Piper-Befehl“ eingetragen werden. Heruntergeladene Stimmen bleiben lokal.
 
 **Was bedeutet die Offline-Schätzung?** Es ist ein einfacher Drucktrend-Indikator, keine meteorologische Vorhersage. Er benötigt mindestens zwei aktuelle Stationsdruckmessungen im Abstand von mindestens einer Stunde aus den letzten fünf Stunden. Die Ansage kennzeichnet das Ergebnis als lokale Schätzung.
 

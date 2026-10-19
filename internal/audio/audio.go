@@ -101,7 +101,11 @@ func Speak(text, model, engine, device string, volume int) error {
 	}
 	tmp := filepath.Join(os.TempDir(), fmt.Sprintf("ultimatewx-%d.wav", time.Now().UnixNano()))
 	defer os.Remove(tmp)
-	p := exec.Command(engine, "--model", model, "--output_file", tmp)
+	piper, err := resolveEngine(engine)
+	if err != nil {
+		return err
+	}
+	p := exec.Command(piper, "--model", model, "--output_file", tmp)
 	p.Stdin = bytes.NewBufferString(text)
 	if b, e := p.CombinedOutput(); e != nil {
 		return fmt.Errorf("TTS engine: %w: %s", e, strings.TrimSpace(string(b)))
@@ -110,4 +114,21 @@ func Speak(text, model, engine, device string, volume int) error {
 		return fmt.Errorf("set announcement volume: %w", err)
 	}
 	return PlayWAV(tmp, device)
+}
+
+func resolveEngine(engine string) (string, error) {
+	if engine != "piper" {
+		return engine, nil
+	}
+	if path, err := exec.LookPath(engine); err == nil {
+		return path, nil
+	}
+	for _, path := range []string{
+		"/opt/ultimatewx/piper-venv/bin/piper",
+	} {
+		if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0 {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("Piper TTS nie jest zainstalowany; uruchom aktualizację aplikacji albo instalator systemowy")
 }
