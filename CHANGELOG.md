@@ -4,7 +4,7 @@ W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na 
 
 ## [Unreleased]
 
-## [0.0.6-prealpha.3] - 2026-10-19
+## [0.0.6-prealpha.4] - 2026-10-19
 
 ### Added
 - W wydaniu dodano eksperymentalny Piper ARMv7 wraz z paczką źródeł zależności, informacjami licencyjnymi i sumami kontrolnymi.
@@ -12,6 +12,7 @@ W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na 
 
 ### Fixed
 - Uzupełniono reguły `.dockerignore`, aby źródła eSpeak i lokalnie zbudowane archiwum fonemizacji były dostępne w kontekstach Docker Buildx.
+- Dodano ponawianie aktualizacji indeksów i instalacji zależności Debiana w buildzie Piper ARMv7, gdy repozytoria zwrócą przejściowe błędy 404.
 
 ## [0.0.6-prealpha.1] - 2026-10-19
 

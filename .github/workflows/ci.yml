@@ -84,6 +84,12 @@ jobs:
 
           dockerfile = Path("piper-phonemize-src/Dockerfile")
           text = dockerfile.read_text()
+          apt_start = text.index("RUN apt-get update &&")
+          apt_end = text.index("# -----------------------------------------------------------------------------", apt_start)
+          apt_retry = '''RUN for attempt in 1 2 3; do apt-get update && apt-get install --yes build-essential cmake curl ca-certificates autoconf automake libtool pkg-config && break; if [ "$attempt" -eq 3 ]; then exit 1; fi; sleep 5; done
+
+          '''
+          text = text[:apt_start] + apt_retry + text[apt_end:]
           start = text.index('RUN curl -L "https://github.com/rhasspy/espeak-ng/archive/refs/heads/master.tar.gz"')
           end = text.index('# Build libpiper_phonemize.so', start)
           replacement = '''COPY espeak-ng/ ./espeak-ng/
@@ -103,6 +109,12 @@ jobs:
           from pathlib import Path
           dockerfile = Path("piper-src/Dockerfile")
           text = dockerfile.read_text()
+          apt_start = text.index("RUN apt-get update &&")
+          apt_end = text.index("# -----------------------------------------------------------------------------", apt_start)
+          apt_retry = '''RUN for attempt in 1 2 3; do apt-get update && apt-get install --yes --no-install-recommends build-essential cmake ca-certificates curl pkg-config && break; if [ "$attempt" -eq 3 ]; then exit 1; fi; sleep 5; done
+
+          '''
+          text = text[:apt_start] + apt_retry + text[apt_end:]
           text = text.replace("ARG PIPER_PHONEMIZE_VERSION='1.1.0'\n", "")
           marker = '# Use pre-compiled Piper phonemization library (includes onnxruntime)'
           start = text.index(marker)
