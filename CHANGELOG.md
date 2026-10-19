@@ -4,7 +4,7 @@ W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na 
 
 ## [Unreleased]
 
-## [0.0.4-prealpha.1] - 2026-10-19
+## [0.0.5-prealpha.1] - 2026-10-19
 
 ### Added
 - Instalator automatycznie instaluje Piper TTS na Raspberry Pi OS/Debian i Ubuntu dla x86-64 oraz ARM64; na Alpine i ARMv7 wyświetla informację o braku zgodnego gotowego pakietu.
