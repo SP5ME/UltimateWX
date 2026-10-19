@@ -64,6 +64,89 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
+      - name: Enable ARMv7 emulation for experimental Piper build
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build Piper 1.2.0 for ARMv7 from source
+        run: |
+          git clone --depth 1 --branch v1.2.0 https://github.com/rhasspy/piper.git piper-src
+          git clone --depth 1 --branch v1.1.0 https://github.com/rhasspy/piper-phonemize.git piper-phonemize-src
+          ESPEAK_COMMIT="$(git ls-remote https://github.com/rhasspy/espeak-ng.git refs/heads/master | cut -f1)"
+          test -n "$ESPEAK_COMMIT"
+          git clone --no-checkout https://github.com/rhasspy/espeak-ng.git espeak-ng-src
+          git -C espeak-ng-src fetch --depth 1 origin "$ESPEAK_COMMIT"
+          git -C espeak-ng-src checkout --detach FETCH_HEAD
+          cp -a espeak-ng-src piper-phonemize-src/espeak-ng
+          python3 - <<'PY'
+          from pathlib import Path
+
+          dockerfile = Path("piper-phonemize-src/Dockerfile")
+          text = dockerfile.read_text()
+          start = text.index('RUN curl -L "https://github.com/rhasspy/espeak-ng/archive/refs/heads/master.tar.gz"')
+          end = text.index('# Build libpiper_phonemize.so', start)
+          replacement = '''COPY espeak-ng/ ./espeak-ng/
+
+          RUN cd espeak-ng && export CFLAGS='-D_FILE_OFFSET_BITS=64' && ./autogen.sh && ./configure --without-pcaudiolib --without-klatt --without-speechplayer --without-mbrola --without-sonic --with-extdict-cmn --prefix=/usr && make -j8 src/espeak-ng src/speak-ng && make && make install
+
+          '''
+          text = text[:start] + replacement + text[end:]
+          dockerfile.write_text(text)
+          PY
+          make -C piper-phonemize-src docker PLATFORMS=linux/arm/v7
+          PHONEMIZE_PACKAGE=piper-phonemize-src/dist/libpiper_phonemize-armv7.tar.gz
+          test -s "$PHONEMIZE_PACKAGE"
+          cp "$PHONEMIZE_PACKAGE" piper-src/libpiper_phonemize-armv7.tar.gz
+          python3 - <<'PY'
+          from pathlib import Path
+          dockerfile = Path("piper-src/Dockerfile")
+          text = dockerfile.read_text()
+          text = text.replace("ARG PIPER_PHONEMIZE_VERSION='1.1.0'\n", "")
+          marker = '# Use pre-compiled Piper phonemization library (includes onnxruntime)'
+          start = text.index(marker)
+          start = text.index('RUN mkdir -p "lib/Linux-$(uname -m)/piper_phonemize"', start)
+          end = text.index('\n\n# Build piper binary', start)
+          new = '''COPY libpiper_phonemize-armv7.tar.gz ./
+          RUN mkdir -p "lib/Linux-$(uname -m)/piper_phonemize" && tar -C "lib/Linux-$(uname -m)/piper_phonemize" -xzf libpiper_phonemize-armv7.tar.gz'''
+          text = text[:start] + new + text[end:]
+          dockerfile.write_text(text)
+          PY
+          make -C piper-src docker DOCKER_PLATFORM=linux/arm/v7
+          test -s piper-src/dist/piper_armv7.tar.gz
+          mkdir -p dist
+          cp piper-src/dist/piper_armv7.tar.gz dist/
+          cp piper-src/LICENSE.md dist/PIPER-ARMV7-LICENSE.md
+          mkdir -p dist/PIPER-ARMV7-SOURCE
+          cp -a piper-src dist/PIPER-ARMV7-SOURCE/piper
+          cp -a piper-phonemize-src dist/PIPER-ARMV7-SOURCE/piper-phonemize
+          cp -a espeak-ng-src dist/PIPER-ARMV7-SOURCE/espeak-ng
+          mkdir -p dist/PIPER-ARMV7-SOURCE/third-party
+          curl -fsSL https://github.com/microsoft/onnxruntime/archive/refs/tags/v1.14.1.tar.gz -o dist/PIPER-ARMV7-SOURCE/third-party/onnxruntime-v1.14.1.tar.gz
+          curl -fsSL https://github.com/gabime/spdlog/archive/refs/tags/v1.11.0.tar.gz -o dist/PIPER-ARMV7-SOURCE/third-party/spdlog-v1.11.0.tar.gz
+          rm -rf dist/PIPER-ARMV7-SOURCE/piper/dist dist/PIPER-ARMV7-SOURCE/piper/build
+          rm -f dist/PIPER-ARMV7-SOURCE/piper/libpiper_phonemize-armv7.tar.gz
+          rm -rf dist/PIPER-ARMV7-SOURCE/piper-phonemize/dist dist/PIPER-ARMV7-SOURCE/piper-phonemize/build dist/PIPER-ARMV7-SOURCE/piper-phonemize/lib dist/PIPER-ARMV7-SOURCE/piper-phonemize/espeak-ng/build
+          rm -rf dist/PIPER-ARMV7-SOURCE/piper/.git dist/PIPER-ARMV7-SOURCE/piper-phonemize/.git dist/PIPER-ARMV7-SOURCE/piper-phonemize/espeak-ng/.git dist/PIPER-ARMV7-SOURCE/espeak-ng/.git
+          cat > dist/PIPER-ARMV7-SOURCE/SOURCES.md <<EOF
+          Piper ARMv7 source bundle
+          =========================
+
+          Piper: rhasspy/piper tag v1.2.0
+          Piper-phonemize: rhasspy/piper-phonemize tag v1.1.0
+          eSpeak NG: rhasspy/espeak-ng commit $ESPEAK_COMMIT (pinned for this build)
+          ONNX Runtime source snapshot: third-party/onnxruntime-v1.14.1.tar.gz
+          spdlog source snapshot: third-party/spdlog-v1.11.0.tar.gz
+
+          Piper and Piper-phonemize Dockerfiles are included. The phonemize Dockerfile
+          is patched to build the eSpeak source included here instead of downloading
+          a moving branch. Upstream build downloads of ONNX Runtime and spdlog are
+          version-pinned; their source and license are available at the URLs above.
+          eSpeak NG is GPL-3.0-or-later. Piper and Piper-phonemize retain their
+          upstream license files in their respective source directories.
+          EOF
+          tar -czf dist/PIPER-ARMV7-SOURCES.tar.gz -C dist PIPER-ARMV7-SOURCE
+          (cd dist && sha256sum piper_armv7.tar.gz PIPER-ARMV7-LICENSE.md PIPER-ARMV7-SOURCES.tar.gz > PIPER-ARMV7-SHA256SUMS)
+          tar -tzf dist/piper_armv7.tar.gz | grep -q '^piper/piper$'
       - name: Check translation approval for PDFs
         id: translations
         run: |
@@ -101,13 +184,13 @@ jobs:
           cp LICENSE docs/LICENSING.md dist/
           mkdir -p dist/LICENSES
           cp LICENSES/Apache-2.0.txt dist/LICENSES/
-          (cd dist && sha256sum ultimatewx_linux_*.tar.gz > SHA256SUMS)
+          (cd dist && sha256sum ultimatewx_linux_*.tar.gz piper_armv7.tar.gz PIPER-ARMV7-LICENSE.md PIPER-ARMV7-SOURCES.tar.gz > SHA256SUMS)
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           PDF_REVIEWED: ${{ steps.translations.outputs.reviewed }}
         run: |
-          assets=(dist/ultimatewx_linux_*.tar.gz dist/SHA256SUMS dist/LICENSE dist/LICENSING.md dist/LICENSES/Apache-2.0.txt)
+          assets=(dist/ultimatewx_linux_*.tar.gz dist/piper_armv7.tar.gz dist/PIPER-ARMV7-SOURCES.tar.gz dist/SHA256SUMS dist/LICENSE dist/LICENSING.md dist/PIPER-ARMV7-LICENSE.md dist/PIPER-ARMV7-SHA256SUMS dist/LICENSES/Apache-2.0.txt)
           if [ "$PDF_REVIEWED" = "true" ]; then
             assets+=(dist/docs/*.pdf)
           fi

@@ -68,8 +68,31 @@ install_piper() {
   fi
 
   case "$DISTRO:$ARCH" in
-    alpine:*|*:armv7)
-      echo "Piper was not installed automatically: no compatible official prebuilt wheel is published for Alpine or ARMv7."
+    alpine:*)
+      echo "Piper was not installed automatically: the ARMv7 Piper build uses glibc and is not compatible with Alpine's musl libc."
+      return
+      ;;
+    *:armv7)
+      PIPER_ASSET=piper_armv7.tar.gz
+      if ! curl -fsSL "$BASE/$PIPER_ASSET" -o "$TMP/$PIPER_ASSET"; then
+        echo "Piper was not installed automatically: this release has no experimental ARMv7 build."
+        return
+      fi
+      grep "  $PIPER_ASSET\$" "$TMP/SHA256SUMS" > "$TMP/PIPER-SHA256SUMS"
+      if [ ! -s "$TMP/PIPER-SHA256SUMS" ] || ! (cd "$TMP" && sha256sum -c PIPER-SHA256SUMS); then
+        echo "Piper ARMv7 package checksum verification failed; it was not installed."
+        return
+      fi
+      if ! tar -tzf "$TMP/$PIPER_ASSET" | grep -q '^piper/piper$'; then
+        echo "Piper ARMv7 package has an unexpected layout; it was not installed."
+        return
+      fi
+      tar -xzf "$TMP/$PIPER_ASSET" -C /opt/ultimatewx
+      if ! ln -sfn /opt/ultimatewx/piper/piper /usr/local/bin/piper; then
+        echo "Piper was installed under /opt/ultimatewx/piper, but its command could not be added to /usr/local/bin."
+        return
+      fi
+      echo "Installed experimental Piper 1.2.0 ARMv7 build from source. Test speech performance on this Raspberry Pi model."
       return
       ;;
   esac
