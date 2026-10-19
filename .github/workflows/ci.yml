@@ -135,6 +135,13 @@ jobs:
           new = '''COPY libpiper_phonemize-armv7.tar.gz ./
           RUN mkdir -p "lib/Linux-$(uname -m)/piper_phonemize" && tar -C "lib/Linux-$(uname -m)/piper_phonemize" -xzf libpiper_phonemize-armv7.tar.gz'''
           text = text[:start] + new + text[end:]
+          test_stage = text.index("FROM debian:bullseye as test")
+          scratch_stage = text.index("FROM scratch", test_stage)
+          text = text[:test_stage] + text[scratch_stage:]
+          text = text.replace(
+              "COPY --from=test /test/piper_*.tar.gz /test/test.wav ./",
+              "COPY --from=build /dist/piper_*.tar.gz ./",
+          )
           dockerfile.write_text(text)
           PY
           make -C piper-src docker DOCKER_PLATFORM=linux/arm/v7
@@ -167,6 +174,9 @@ jobs:
           is patched to build the eSpeak source included here instead of downloading
           a moving branch. Upstream build downloads of ONNX Runtime and spdlog are
           version-pinned; their source and license are available at the URLs above.
+          The Piper Docker test stage that requires a separately licensed example
+          voice is omitted; the upstream build still checks the compiled binary
+          with its --help command.
           eSpeak NG is GPL-3.0-or-later. Piper and Piper-phonemize retain their
           upstream license files in their respective source directories.
           EOF
