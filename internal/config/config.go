@@ -44,6 +44,7 @@ type Config struct {
 	StationCallsign string     `json:"station_callsign"`
 	StationLocator  string     `json:"station_locator"`
 	APRSRadiusKM    float64    `json:"aprs_radius_km"`
+	WeatherSource   string     `json:"weather_source"`
 	APRSHost        string     `json:"aprs_host"`
 	APRSPort        int        `json:"aprs_port"`
 	AudioInput      string     `json:"audio_input"`
@@ -68,7 +69,7 @@ type Config struct {
 }
 
 func Defaults() Config {
-	return Config{Latitude: 0, Longitude: 0, LocationName: "", Units: "metric", Locale: "", APRSRadiusKM: 10, APRSPort: 8001, I2CDevice: "/dev/i2c-1", I2CAddress: 0x76,
+	return Config{Latitude: 0, Longitude: 0, LocationName: "", Units: "metric", Locale: "", APRSRadiusKM: 10, WeatherSource: "auto", APRSPort: 8001, I2CDevice: "/dev/i2c-1", I2CAddress: 0x76,
 		MQTTTopic: "ultimatewx/+/weather", SerialBaud: 9600, HistoryDays: 7,
 		Schedules: []Schedule{{Time: "07:00"}, {Time: "12:00"}, {Time: "18:00"}},
 		Blocks: []Block{{ID: "greeting", Enabled: true, Title: "Powitanie", Kind: "text", Text: "Komunikat pogodowy UltimateWX."},
@@ -110,6 +111,9 @@ func Validate(c Config) error {
 	}
 	if c.APRSRadiusKM < 0 || c.APRSRadiusKM > 1000 {
 		return errors.New("APRS radius must be 0..1000 km")
+	}
+	if c.WeatherSource != "" && c.WeatherSource != "auto" && c.WeatherSource != "open-meteo" && c.WeatherSource != "aprs" && c.WeatherSource != "bme280" && c.WeatherSource != "mqtt" && c.WeatherSource != "home-assistant" && c.WeatherSource != "serial" {
+		return errors.New("unsupported preferred weather source")
 	}
 	if c.HistoryDays < 1 || c.HistoryDays > 365 {
 		return errors.New("history retention must be 1..365 days")

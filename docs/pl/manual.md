@@ -21,7 +21,7 @@ Przy pierwszym uruchomieniu konfigurator stacji pojawia się przed ustawieniem d
 
 Zakładka **Status** pokazuje skonfigurowane źródła, urządzenia audio, czas ostatniej aktualizacji pogody online i podgląd komunikatu. **Konfiguracja** jest podzielona na zakładki: Stacja pogodowa, Lokalizacja stacji, Źródła pogody, Czujniki, Audio i głos oraz Komunikat i harmonogram. W zakładce Stacja pogodowa ustaw znak i lokator Maidenhead. Druga zakładka, Lokalizacja stacji, służy do wyszukiwania miejscowości, ustawienia wysokości i wskazania punktu na mapie. Kliknij mapę albo przeciągnij ją tak, by punkt stacji znalazł się pod celownikiem; współrzędne są widoczne w polach i zapisują się ze wspólnym formularzem. Mapa używa kafelków OpenStreetMap i wymaga internetu. W tekstowym bloku komunikatu użyj `<call>` dla znaku i `<loc>` dla lokatora, np. `Tu stacja pogodowa <call> znajdująca się w <loc>.` W harmonogramie dodaj stałe godziny albo cykliczne odtwarzanie co godzinę, np. 5 minut po każdej pełnej godzinie. Zaznacz pozycje, które mają być aktywne. Przełączanie zakładek zachowuje wpisane zmiany; użyj wspólnego przycisku zapisu, aby zapisać formularz. **Statystyki** pokazują zachowane pomiary, ramki i odtworzenia. **Monitor APRS** wyświetla wszystkie zapisane ramki albo tylko WX oraz wyjaśnia, czy ramka WX może zasilać pogodę.
 
-Open-Meteo jest odpytywane co 15 minut. Darmowe API jest przeznaczone do użytku niekomercyjnego, a dane wymagają atrybucji CC BY 4.0; panel pokazuje informację o źródle. Jeśli te warunki nie pasują do sposobu użycia, wyłącz źródło i skonfiguruj innego dostawcę, gdy będzie dostępny odpowiedni adapter.
+Open-Meteo jest odpytywane co 15 minut. Darmowe API jest przeznaczone do użytku niekomercyjnego, a dane wymagają atrybucji CC BY 4.0; panel pokazuje informację o źródle. W **Konfiguracja → Źródła pogody** wybierz preferowane źródło bieżących pomiarów: automatycznie, Open-Meteo, pobliskie ramki APRS WX odbierane przez TNC, BME280, MQTT, Home Assistant albo USB/serial. Preferencja dotyczy bloczków komunikatu ustawionych na źródło automatyczne; gdy brakuje świeżego pomiaru wybranego parametru, używany jest najnowszy dostępny odczyt. Prognoza pozostaje z Open-Meteo. W edytorze bloczka możesz wskazać źródło osobno.
 
 APRS łączy się z zewnętrznym punktem KISS TCP Dire Wolf, zwykle `127.0.0.1:8001`. Skonfiguruj Dire Wolf, aby odbierał dźwięk z radia i przekazywał ramki KISS do UltimateWX. Domyślny promień kwalifikowania źródła WX to 10 km. Ramki bez obsługiwanej pozycji, z błędnymi polami pogody, poza promieniem lub odebrane ponad dwie godziny temu pozostają w monitorze, ale nie zasilają odczytów pogodowych.
 
@@ -43,7 +43,40 @@ Integracja Home Assistant korzysta z REST API i tokenu dostępu. Ustaw adres baz
 
 Dla USB/serial wybierz urządzenie, np. `/dev/ttyUSB0`, ustaw prędkość transmisji i wysyłaj jeden obiekt JSON zakończony znakiem nowej linii dla każdej próbki. Obowiązują nazwy pól z przykładu MQTT.
 
-Aby podłączyć BME280 bezpośrednio do Raspberry Pi, włącz profil I²C, ustaw `/dev/i2c-1` i adres 118 (`0x76`) albo 119 (`0x77`), a czujnik podłącz do pinów I²C płytki z właściwym napięciem logicznym. Aplikacja zapisuje ciśnienie stacyjne i osobno wylicza ciśnienie zredukowane do poziomu morza na podstawie ustawionej wysokości. Przed włączeniem sprawdź adres czujnika i przewody.
+### BME280 bezpośrednio do Raspberry Pi (I²C)
+
+Przy wyłączonym zasilaniu połącz moduł z 40-pinowym złączem Raspberry Pi:
+
+| Pin na module BME280 | Pin fizyczny Raspberry Pi | Sygnał |
+| --- | ---: | --- |
+| `VCC` lub `VIN` | 1 (3V3) | Zasilanie 3,3 V |
+| `GND` | 6 (GND) | Masa |
+| `SDA` lub `SDI` | 3 (GPIO2 / SDA1) | Dane I²C |
+| `SCL` lub `SCK` | 5 (GPIO3 / SCL1) | Zegar I²C |
+
+Użyj 3,3 V i nie podłączaj linii GPIO do 5 V. Jeśli moduł ma tylko cztery wyprowadzenia (`VCC`, `GND`, `SDA`, `SCL`), powyższe połączenia wystarczą. Przy module z dodatkowymi pinami ustaw `CS`/`CSB` na 3,3 V, aby wybrać I²C. Pin `SDO` wybiera adres: połączenie z `GND` oznacza `0x76`, a z 3,3 V — `0x77`. W niektórych modułach adres jest już ustawiony zworką lub ścieżką; sprawdź opis swojej płytki. W konfiguracji UltimateWX wpisz odpowiednio `118` dla `0x76` lub `119` dla `0x77`.
+
+W Raspberry Pi OS włącz I²C poleceniem `sudo raspi-config`, wybierając **Interface Options → I2C → Enable**, i uruchom ponownie komputer. Jeśli nie masz narzędzia do sprawdzenia magistrali, zainstaluj `i2c-tools` (`sudo apt install i2c-tools`), a potem uruchom `sudo i2cdetect -y 1`. W tabeli powinien pojawić się adres `76` albo `77`. Przykładowy wynik dla czujnika pod adresem `0x76`:
+
+```text
+pi@raspberrypi:~ $ sudo i2cdetect -y 1
+     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+00:                         -- -- -- -- -- -- -- --
+10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+20: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+30: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+40: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+70: -- -- -- -- -- -- 76 --
+pi@raspberrypi:~ $
+```
+
+`i2cdetect` wyświetla adresy szesnastkowo — dlatego w tabeli widzisz `76`, bez prefiksu `0x`. Prefiks `0x` oznacza zapis szesnastkowy. UltimateWX w polu adresu przyjmuje tę samą wartość jako liczbę dziesiętną: `0x76` to `7 × 16 + 6 = 118`, a `0x77` to `7 × 16 + 7 = 119`. Nie musisz samodzielnie ustalać adresu: odczytaj `76` lub `77` z wyniku `i2cdetect` i wpisz odpowiadającą mu liczbę dziesiętną.
+
+To, czy moduł odpowiada pod `0x76`, czy `0x77`, zależy od pinu `SDO` albo zworki adresowej na płytce: `SDO` połączone z masą wybiera `0x76`, a z 3,3 V — `0x77`. W zakładce **Konfiguracja → Czujniki** włącz BME280, pozostaw urządzenie `/dev/i2c-1`, ustaw wyliczoną wartość adresu i zapisz konfigurację.
+
+BME280 mierzy ciśnienie stacyjne. UltimateWX osobno wylicza ciśnienie zredukowane do poziomu morza na podstawie wysokości stacji. Schemat pinów Raspberry Pi znajdziesz w [oficjalnej dokumentacji GPIO](https://www.raspberrypi.com/documentation/computers/raspberry-pi.html), a wymagania trybu I²C i adresów opisuje [karta katalogowa Bosch BME280](https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bme280-ds002.pdf).
 
 ## FAQ i diagnostyka
 

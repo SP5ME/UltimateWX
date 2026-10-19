@@ -4,6 +4,19 @@ W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na 
 
 ## [Unreleased]
 
+## [0.0.3-prealpha.8] - 2026-10-19
+
+### Added
+- Dodano wybór preferowanego źródła bieżącej pogody: Open-Meteo, APRS WX/TNC, BME280, MQTT, Home Assistant lub USB/serial. Przy braku świeżego odczytu aplikacja korzysta z najnowszej dostępnej wartości; prognoza pozostaje z Open-Meteo.
+- Dodano wykresy historii temperatury, wilgotności i ciśnienia z wyborem zakresu 24 godzin, 7 dni lub 30 dni.
+- Dodano status odbioru BME280 z czasem ostatniego odczytu, błędem czujnika oraz automatycznym odświeżaniem.
+- Dodano czytelne potwierdzenie zapisywania, zapisania i błędu zapisu konfiguracji.
+- Rozszerzono polską instrukcję o pinout BME280, przykładowy wynik `i2cdetect` oraz wyjaśnienie adresów szesnastkowych i dziesiętnych.
+- Zastąpiono surowy JSON historii odtworzeń komunikatów czytelnymi wpisami.
+
+### Changed
+- Uporządkowano statystyki i komunikaty, aby wyświetlały dane jako czytelne elementy interfejsu.
+
 ## [0.0.3-prealpha.7] - 2026-10-18
 
 ### Added

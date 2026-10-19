@@ -38,6 +38,8 @@ type App struct {
 	cfg                 config.Config
 	cfgMu               sync.RWMutex
 	history             *store.Store
+	bmeStatusMu         sync.RWMutex
+	bmeLastError        string
 	voices              *tts.Service
 	snapshot            weather.Snapshot
 	snapMu              sync.RWMutex
@@ -384,7 +386,18 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 	a.snapMu.RLock()
 	s := a.snapshot
 	a.snapMu.RUnlock()
-	writeJSON(w, 200, map[string]any{"version": updater.Version, "location": c.LocationName, "weather_updated_at": s.UpdatedAt, "weather_error": s.Error, "sources": map[string]any{"open_meteo": s.UpdatedAt.IsZero() || time.Since(s.UpdatedAt) > 30*time.Minute, "aprs": c.APRSHost == "", "mqtt": c.MQTTBroker == "", "home_assistant": c.HAURL == "", "serial": c.SerialPort == "", "bme280": !c.BMEEnabled}, "tts_configured": c.TTSVoice != "", "audio": audio.List(), "uptime_seconds": int64(time.Since(startedAt).Seconds())})
+	var bmeLastReading time.Time
+	for _, observation := range a.history.Latest() {
+		if observation.Source == "bme280" && observation.Parameter == "temperature" {
+			bmeLastReading = observation.ObservedAt
+			break
+		}
+	}
+	bmeReceiving := c.BMEEnabled && !bmeLastReading.IsZero() && time.Since(bmeLastReading) < 90*time.Second
+	a.bmeStatusMu.RLock()
+	bmeError := a.bmeLastError
+	a.bmeStatusMu.RUnlock()
+	writeJSON(w, 200, map[string]any{"version": updater.Version, "location": c.LocationName, "weather_updated_at": s.UpdatedAt, "weather_error": s.Error, "sources": map[string]any{"open_meteo": s.UpdatedAt.IsZero() || time.Since(s.UpdatedAt) > 30*time.Minute, "aprs": c.APRSHost == "", "mqtt": c.MQTTBroker == "", "home_assistant": c.HAURL == "", "serial": c.SerialPort == "", "bme280": !bmeReceiving}, "bme280": map[string]any{"enabled": c.BMEEnabled, "receiving": bmeReceiving, "last_reading_at": bmeLastReading, "error": bmeError}, "tts_configured": c.TTSVoice != "", "audio": audio.List(), "uptime_seconds": int64(time.Since(startedAt).Seconds())})
 }
 func (a *App) configuration(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -425,8 +438,19 @@ func (a *App) weatherStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"snapshot": s, "latest": a.history.Latest(), "local_estimate": estimate(a.history.Observations(days))})
 }
 func (a *App) stats(w http.ResponseWriter, r *http.Request) {
-	a.history.Prune(a.Config().HistoryDays)
-	writeJSON(w, 200, a.history.Stats())
+	c := a.Config()
+	a.history.Prune(c.HistoryDays)
+	stats := a.history.Stats()
+	chartHistoryDays := c.HistoryDays
+	if chartHistoryDays > 30 {
+		chartHistoryDays = 30
+	}
+	observations := a.history.Observations(chartHistoryDays)
+	for i := range observations {
+		observations[i] = weather.Convert(observations[i], c.Units)
+	}
+	stats["history"] = observations
+	writeJSON(w, 200, stats)
 }
 func (a *App) aprsFrames(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
@@ -676,7 +700,14 @@ func (a *App) buildAnnouncement() string {
 				prefix = "forecast_"
 			}
 			for _, field := range b.Fields {
-				o, ok := selectObservation(byKey, prefix+field, b.Source)
+				source := b.Source
+				if b.Kind == "weather" && (source == "" || source == "auto") && c.WeatherSource != "" {
+					source = c.WeatherSource
+				}
+				o, ok := selectObservation(byKey, prefix+field, source)
+				if !ok && b.Kind == "weather" && (b.Source == "" || b.Source == "auto") && source != "" && source != "auto" {
+					o, ok = selectObservation(byKey, prefix+field, "auto")
+				}
 				if ok {
 					out = append(out, renderObservation(weather.Convert(o, c.Units), c.Locale))
 				}
@@ -713,7 +744,18 @@ func selectObservation(m map[string]weather.Observation, key, source string) (we
 		if ok && time.Since(o.ObservedAt) < 2*time.Hour {
 			return o, true
 		}
-		return weather.Observation{}, false
+		if strings.Contains(source, ":") {
+			return weather.Observation{}, false
+		}
+		prefix := key + "|" + source + ":"
+		var best weather.Observation
+		found := false
+		for storedKey, candidate := range m {
+			if strings.HasPrefix(storedKey, prefix) && time.Since(candidate.ObservedAt) < 2*time.Hour && (!found || candidate.ObservedAt.After(best.ObservedAt)) {
+				best, found = candidate, true
+			}
+		}
+		return best, found
 	}
 	var best weather.Observation
 	ok := false
@@ -1001,8 +1043,14 @@ func (a *App) bmeLoop(ctx context.Context) {
 		if c.BMEEnabled {
 			temp, humidity, pressure, err := bme280.Read(c.I2CDevice, uint16(c.I2CAddress))
 			if err != nil {
+				a.bmeStatusMu.Lock()
+				a.bmeLastError = err.Error()
+				a.bmeStatusMu.Unlock()
 				log.Printf("BME280: %v", err)
 			} else {
+				a.bmeStatusMu.Lock()
+				a.bmeLastError = ""
+				a.bmeStatusMu.Unlock()
 				at := time.Now().UTC()
 				_ = a.history.AddObservation(weather.Observation{Parameter: "temperature", Value: temp, Unit: "°C", ObservedAt: at, Source: "bme280", Quality: "measured"})
 				_ = a.history.AddObservation(weather.Observation{Parameter: "humidity", Value: humidity, Unit: "%", ObservedAt: at, Source: "bme280", Quality: "measured"})
