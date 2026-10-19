@@ -19,7 +19,7 @@ import (
 )
 
 const repository = "rhasspy/piper-voices"
-const revision = "v1.0.0"
+const revision = "main"
 const maxModelSize = 250 << 20
 
 type Voice struct {
