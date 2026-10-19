@@ -49,3 +49,33 @@ func TestExtractBinaryRequiresExpectedFile(t *testing.T) {
 		t.Fatal("expected missing binary to fail")
 	}
 }
+
+func TestLatestReleaseUsesSemanticVersionNotGitHubListOrder(t *testing.T) {
+	releases := []Release{
+		{TagName: "v0.0.3-prealpha.9"},
+		{TagName: "v0.0.3-prealpha.8"},
+		{TagName: "v0.0.3-prealpha.10"},
+		{TagName: "v0.0.3-prealpha.99", Draft: true},
+	}
+	got, ok := latestSemverRelease(releases)
+	if !ok || got.TagName != "v0.0.3-prealpha.10" {
+		t.Fatalf("latest release = %q, %v; want v0.0.3-prealpha.10", got.TagName, ok)
+	}
+}
+
+func TestCompareVersionsSemverPrecedence(t *testing.T) {
+	for _, test := range []struct {
+		a, b string
+		want int
+	}{
+		{"v0.0.3-prealpha.10", "v0.0.3-prealpha.9", 1},
+		{"v0.0.3", "v0.0.3-prealpha.10", 1},
+		{"v0.0.3-alpha.1", "v0.0.3-alpha.beta", -1},
+		{"v0.0.3-alpha", "v0.0.3-alpha.1", -1},
+	} {
+		got, ok := compareVersions(test.a, test.b)
+		if !ok || got != test.want {
+			t.Errorf("compareVersions(%q, %q) = %d, %v; want %d, true", test.a, test.b, got, ok, test.want)
+		}
+	}
+}

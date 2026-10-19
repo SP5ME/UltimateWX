@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -24,6 +25,7 @@ const maxReleaseBytes = 100 << 20
 
 type Release struct {
 	TagName     string    `json:"tag_name"`
+	Draft       bool      `json:"draft"`
 	Name        string    `json:"name"`
 	Body        string    `json:"body"`
 	HTMLURL     string    `json:"html_url"`
@@ -58,7 +60,11 @@ func Check(ctx context.Context, goos, arch string) Status {
 	out.LatestVersion = r.TagName
 	out.Notes = r.Body
 	out.URL = r.HTMLURL
-	out.Available = normalize(r.TagName) != normalize(Version)
+	if comparison, ok := compareVersions(r.TagName, Version); ok {
+		out.Available = comparison > 0
+	} else {
+		out.Available = normalize(r.TagName) != normalize(Version)
+	}
 	asset := archiveName(goos, arch)
 	if !hasAsset(r, asset) || !hasAsset(r, "SHA256SUMS") {
 		out.Available = false
@@ -68,7 +74,7 @@ func Check(ctx context.Context, goos, arch string) Status {
 }
 func normalize(v string) string { return strings.TrimPrefix(strings.TrimSpace(v), "v") }
 func latestRelease(ctx context.Context) (Release, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/repos/"+Repository+"/releases?per_page=1", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/repos/"+Repository+"/releases?per_page=100", nil)
 	if err != nil {
 		return Release{}, err
 	}
@@ -86,10 +92,144 @@ func latestRelease(ctx context.Context) (Release, error) {
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 2<<20)).Decode(&releases); err != nil {
 		return Release{}, err
 	}
-	if len(releases) == 0 {
+	release, ok := latestSemverRelease(releases)
+	if !ok {
 		return Release{}, errors.New("brak opublikowanych wydań")
 	}
-	return releases[0], nil
+	return release, nil
+}
+
+func latestSemverRelease(releases []Release) (Release, bool) {
+	var latest Release
+	found := false
+	for _, release := range releases {
+		if release.Draft {
+			continue
+		}
+		if _, _, _, _, ok := parseVersion(release.TagName); !ok {
+			continue
+		}
+		if !found {
+			latest, found = release, true
+			continue
+		}
+		if comparison, ok := compareVersions(release.TagName, latest.TagName); ok && comparison > 0 {
+			latest = release
+		}
+	}
+	return latest, found
+}
+
+func compareVersions(a, b string) (int, bool) {
+	aMajor, aMinor, aPatch, aPre, aOK := parseVersion(a)
+	bMajor, bMinor, bPatch, bPre, bOK := parseVersion(b)
+	if !aOK || !bOK {
+		return 0, false
+	}
+	for _, pair := range [][2]uint64{{aMajor, bMajor}, {aMinor, bMinor}, {aPatch, bPatch}} {
+		if pair[0] < pair[1] {
+			return -1, true
+		}
+		if pair[0] > pair[1] {
+			return 1, true
+		}
+	}
+	if len(aPre) == 0 && len(bPre) > 0 {
+		return 1, true
+	}
+	if len(aPre) > 0 && len(bPre) == 0 {
+		return -1, true
+	}
+	for i := 0; i < len(aPre) && i < len(bPre); i++ {
+		aNumeric, bNumeric := numericIdentifier(aPre[i]), numericIdentifier(bPre[i])
+		switch {
+		case aNumeric && bNumeric:
+			if len(aPre[i]) < len(bPre[i]) {
+				return -1, true
+			}
+			if len(aPre[i]) > len(bPre[i]) {
+				return 1, true
+			}
+		case aNumeric && !bNumeric:
+			return -1, true
+		case !aNumeric && bNumeric:
+			return 1, true
+		default:
+			if aPre[i] < bPre[i] {
+				return -1, true
+			}
+			if aPre[i] > bPre[i] {
+				return 1, true
+			}
+		}
+	}
+	if len(aPre) < len(bPre) {
+		return -1, true
+	}
+	if len(aPre) > len(bPre) {
+		return 1, true
+	}
+	return 0, true
+}
+
+func parseVersion(version string) (uint64, uint64, uint64, []string, bool) {
+	version = normalize(version)
+	if version == "" || strings.Count(version, "+") > 1 {
+		return 0, 0, 0, nil, false
+	}
+	version, _, _ = strings.Cut(version, "+")
+	core, preText, hasPre := strings.Cut(version, "-")
+	parts := strings.Split(core, ".")
+	if len(parts) != 3 {
+		return 0, 0, 0, nil, false
+	}
+	var numbers [3]uint64
+	for i, part := range parts {
+		if part == "" || (len(part) > 1 && part[0] == '0') {
+			return 0, 0, 0, nil, false
+		}
+		for _, ch := range part {
+			if ch < '0' || ch > '9' {
+				return 0, 0, 0, nil, false
+			}
+		}
+		number, err := strconv.ParseUint(part, 10, 64)
+		if err != nil {
+			return 0, 0, 0, nil, false
+		}
+		numbers[i] = number
+	}
+	var pre []string
+	if hasPre {
+		pre = strings.Split(preText, ".")
+		for _, identifier := range pre {
+			if identifier == "" {
+				return 0, 0, 0, nil, false
+			}
+			numeric := true
+			for _, ch := range identifier {
+				if !((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || ch == '-') {
+					return 0, 0, 0, nil, false
+				}
+				if ch < '0' || ch > '9' {
+					numeric = false
+				}
+			}
+			if numeric && len(identifier) > 1 && identifier[0] == '0' {
+				return 0, 0, 0, nil, false
+			}
+		}
+	}
+	return numbers[0], numbers[1], numbers[2], pre, true
+}
+
+func numericIdentifier(identifier string) bool {
+	for _, ch := range identifier {
+		if ch < '0' || ch > '9' {
+			return false
+		}
+	}
+	return identifier != ""
 }
 func archiveName(goos, arch string) string {
 	if goos == "linux" && arch == "arm" {

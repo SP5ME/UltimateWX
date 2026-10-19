@@ -2,6 +2,11 @@
 
 W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), a wersje na [Semantic Versioning](https://semver.org/).
 
+## [0.0.4] - 2026-10-19
+
+### Fixed
+- Poprawiono sprawdzanie aktualizacji: aplikacja porównuje wersje semantycznie i wybiera najnowsze wydanie zamiast pierwszej pozycji zwracanej przez API GitHub.
+
 ## [0.0.3-prealpha.10] - 2026-10-19
 
 ### Added
