@@ -130,23 +130,21 @@ func (p OpenMeteo) Fetch(ctx context.Context, lat, lon float64, units string) (S
 	}
 	if idx >= 0 && idx < len(raw.Hourly.Temperature) {
 		forecastAt, _ := time.ParseInLocation("2006-01-02T15:04", raw.Hourly.Time[idx], time.UTC)
-		items := [][3]any{{"temperature", raw.Hourly.Temperature[idx], raw.HourlyUnits["temperature_2m"]}, {"precipitation_probability", valueAt(raw.Hourly.Pop, idx), "%"}, {"precipitation", valueAt(raw.Hourly.Precip, idx), raw.HourlyUnits["precipitation"]}, {"wind_speed", valueAt(raw.Hourly.Wind, idx), raw.HourlyUnits["wind_speed_10m"]}, {"wind_direction", valueAt(raw.Hourly.WindDir, idx), "°"}}
-		for _, it := range items {
-			if v, ok := it[1].(float64); ok {
-				s.Forecast = append(s.Forecast, obs(it[0].(string), v, defaultString(it[2].(string)), forecastAt.UTC(), "open-meteo"))
+		appendForecast := func(parameter string, values []float64, unit string) {
+			if idx < len(values) {
+				s.Forecast = append(s.Forecast, obs(parameter, values[idx], defaultString(unit), forecastAt.UTC(), "open-meteo"))
 			}
 		}
+		appendForecast("temperature", raw.Hourly.Temperature, raw.HourlyUnits["temperature_2m"])
+		appendForecast("precipitation_probability", raw.Hourly.Pop, "%")
+		appendForecast("precipitation", raw.Hourly.Precip, raw.HourlyUnits["precipitation"])
+		appendForecast("wind_speed", raw.Hourly.Wind, raw.HourlyUnits["wind_speed_10m"])
+		appendForecast("wind_direction", raw.Hourly.WindDir, "°")
 	}
 	return s, nil
 }
 func obs(p string, v float64, u string, t time.Time, src string) Observation {
 	return Observation{Parameter: p, Value: v, Unit: u, ObservedAt: t, Source: src, Quality: "modelled"}
-}
-func valueAt(a []float64, i int) float64 {
-	if i < len(a) {
-		return a[i]
-	}
-	return 0
 }
 func defaultString(s string) string {
 	if strings.TrimSpace(s) == "" {

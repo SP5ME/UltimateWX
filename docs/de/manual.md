@@ -25,7 +25,7 @@ Open-Meteo wird alle 15 Minuten abgefragt. Die kostenlose API ist für nicht kom
 
 APRS verbindet sich mit einem externen Dire-Wolf/KISS-TCP-Endpunkt, normalerweise `127.0.0.1:8001`. Konfigurieren Sie Dire Wolf für den Radioempfang und die Weitergabe von KISS-Frames an UltimateWX. Der Standardradius für WX-Quellen beträgt 10 km. Frames ohne unterstützte Position, mit ungültigen Wetterfeldern, außerhalb des Radius oder älter als zwei Stunden bleiben im Monitor sichtbar, werden aber nicht als Wetterdaten verwendet.
 
-Audioeingang und -ausgang werden getrennt gewählt. Der Eingang gehört zum Empfängerpfad in Dire Wolf; der Ausgang wird von `aplay` für die Ansage verwendet. Zur Geräteerkennung und Wiedergabe werden ALSA-Werkzeuge (`arecord`, `aplay`) und ein lokaler Piper-Befehl benötigt. Die Auswahl des Eingangs konfiguriert Dire Wolf nicht automatisch.
+UltimateWX empfängt APRS-Frames von einem externen TNC über TCP-KISS; daher ist hier kein Audioeingang nötig. Wählen Sie den Ansageausgang und stellen Sie seine Softwarelautstärke zwischen 0 % und 100 % ein. Für die Wiedergabe werden ALSA (`aplay`) und ein lokaler Piper-Befehl benötigt.
 
 Der Ansageeditor speichert geordnete Bausteine als JSON. Jeder Baustein lässt sich aktivieren, einem Typ und einer Quelle zuordnen und mit Feldern oder Text versehen. Die Standardzeiten sind zunächst deaktiviert. Ein `forecast`-Baustein verwendet die Open-Meteo-Vorhersage für vier Stunden später; `local-estimate` wird ausdrücklich als Schätzung bezeichnet und ohne aktuelle Druckmessungen ausgelassen.
 
@@ -49,7 +49,7 @@ Für einen BME280 am Raspberry Pi aktivieren Sie das direkte I²C-Profil, tragen
 
 **Das Panel öffnet sich nicht.** Prüfen Sie den Dienst und TCP-Port 8080 im lokalen Netzwerk. Bei systemd: `systemctl status ultimatewx`; bei OpenRC: `rc-service ultimatewx status`.
 
-**Es kommen keine APRS-Daten an.** Prüfen Sie den Empfänger-Audiopfad in Dire Wolf, KISS-TCP-Host und Port sowie AX.25-UI-Frames des TNC. Die ausgewählte Audioeingabe dient derzeit als Hinweis für die Empfängerkonfiguration; UltimateWX liest den resultierenden KISS-Datenstrom.
+**Es kommen keine APRS-Daten an.** Prüfen Sie den Empfänger-Audiopfad in Dire Wolf, KISS-TCP-Host und Port sowie AX.25-UI-Frames des TNC. UltimateWX liest den resultierenden KISS-Datenstrom und erfasst das Empfängeraudio nicht selbst.
 
 **Ein naher Frame wird nicht verwendet.** Prüfen Sie Position, Wetterfelder, Empfangszeit und Entfernung im Monitor. Erhöhen Sie den Radius nur, wenn er zur beabsichtigten Stationsabdeckung passt.
 

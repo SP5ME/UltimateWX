@@ -68,19 +68,24 @@ func (s *Service) Catalog(ctx context.Context, language string) ([]Voice, error)
 		return nil, fmt.Errorf("unsupported language")
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	if time.Since(s.cachedAt[language]) <= time.Hour && len(s.catalog[language]) > 0 {
+		out := append([]Voice(nil), s.catalog[language]...)
+		s.mu.Unlock()
+		return out, nil
+	}
+	s.mu.Unlock()
+
+	catalog, err := s.fetchCatalog(ctx, language)
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
 	if time.Since(s.cachedAt[language]) > time.Hour || len(s.catalog[language]) == 0 {
-		catalog, e := s.fetchCatalog(ctx, language)
-		if e != nil {
-			return nil, e
-		}
 		s.catalog[language] = catalog
 		s.cachedAt[language] = time.Now()
 	}
-	out := make([]Voice, 0)
-	for _, v := range s.catalog[language] {
-		out = append(out, v)
-	}
+	out := append([]Voice(nil), s.catalog[language]...)
+	s.mu.Unlock()
 	return out, nil
 }
 func (s *Service) fetchCatalog(ctx context.Context, language string) ([]Voice, error) {

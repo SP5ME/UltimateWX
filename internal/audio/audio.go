@@ -19,7 +19,7 @@ type Devices struct {
 	Outputs []Device `json:"outputs"`
 }
 
-func List() Devices { return Devices{Inputs: list("arecord"), Outputs: list("aplay")} }
+func List() Devices { return Devices{Inputs: []Device{}, Outputs: list("aplay")} }
 func list(command string) []Device {
 	out, err := exec.Command(command, "-L").Output()
 	if err != nil {
@@ -86,7 +86,7 @@ func PlayWAV(path, device string) error {
 	}
 	return nil
 }
-func Speak(text, model, engine, device string) error {
+func Speak(text, model, engine, device string, volume int) error {
 	if strings.TrimSpace(text) == "" {
 		return fmt.Errorf("empty announcement")
 	}
@@ -96,12 +96,18 @@ func Speak(text, model, engine, device string) error {
 	if model == "" {
 		return fmt.Errorf("select and download a TTS voice first")
 	}
+	if volume < 0 || volume > 100 {
+		return fmt.Errorf("announcement audio volume must be 0..100 percent")
+	}
 	tmp := filepath.Join(os.TempDir(), fmt.Sprintf("ultimatewx-%d.wav", time.Now().UnixNano()))
 	defer os.Remove(tmp)
 	p := exec.Command(engine, "--model", model, "--output_file", tmp)
 	p.Stdin = bytes.NewBufferString(text)
 	if b, e := p.CombinedOutput(); e != nil {
 		return fmt.Errorf("TTS engine: %w: %s", e, strings.TrimSpace(string(b)))
+	}
+	if err := setWAVVolume(tmp, volume); err != nil {
+		return fmt.Errorf("set announcement volume: %w", err)
 	}
 	return PlayWAV(tmp, device)
 }

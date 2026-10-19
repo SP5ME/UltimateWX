@@ -49,6 +49,7 @@ type Config struct {
 	APRSPort        int        `json:"aprs_port"`
 	AudioInput      string     `json:"audio_input"`
 	AudioOutput     string     `json:"audio_output"`
+	AudioVolume     int        `json:"audio_volume"`
 	MQTTBroker      string     `json:"mqtt_broker"`
 	MQTTTopic       string     `json:"mqtt_topic"`
 	MQTTUsername    string     `json:"mqtt_username,omitempty"`
@@ -70,7 +71,7 @@ type Config struct {
 
 func Defaults() Config {
 	return Config{Latitude: 0, Longitude: 0, LocationName: "", Units: "metric", Locale: "", APRSRadiusKM: 10, WeatherSource: "auto", APRSPort: 8001, I2CDevice: "/dev/i2c-1", I2CAddress: 0x76,
-		MQTTTopic: "ultimatewx/+/weather", SerialBaud: 9600, HistoryDays: 7,
+		MQTTTopic: "ultimatewx/+/weather", SerialBaud: 9600, HistoryDays: 7, AudioVolume: 100,
 		Schedules: []Schedule{{Time: "07:00"}, {Time: "12:00"}, {Time: "18:00"}},
 		Blocks: []Block{{ID: "greeting", Enabled: true, Title: "Powitanie", Kind: "text", Text: "Komunikat pogodowy UltimateWX."},
 			{ID: "datetime", Enabled: true, Title: "Data i godzina", Kind: "datetime", Source: "system"},
@@ -120,6 +121,9 @@ func Validate(c Config) error {
 	}
 	if c.I2CAddress != 0x76 && c.I2CAddress != 0x77 {
 		return errors.New("BME280 I2C address must be 0x76 or 0x77")
+	}
+	if c.AudioVolume < 0 || c.AudioVolume > 100 {
+		return errors.New("announcement audio volume must be 0..100 percent")
 	}
 	if c.Units != "metric" && c.Units != "imperial" && c.Units != "aviation" {
 		return errors.New("units must be metric, imperial or aviation")

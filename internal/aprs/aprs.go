@@ -74,7 +74,7 @@ func ParseTNC2(line string, received time.Time, centerLat, centerLon, radiusKM f
 	return f, nil
 }
 func hasWX(s string) bool {
-	return positionRE.MatchString(s) && weatherFieldRE.MatchString(s)
+	return weatherFieldRE.MatchString(s)
 }
 func coordinate(s, hemisphere string, degreeDigits int) (float64, error) {
 	n, e := strconv.ParseFloat(s, 64)

@@ -25,7 +25,7 @@ Open-Meteo viene interrogato ogni 15 minuti. La sua API gratuita è destinata a 
 
 APRS si collega a un endpoint TCP KISS esterno di Dire Wolf, normalmente `127.0.0.1:8001`. Configura Dire Wolf per ricevere l’audio radio e inoltrare i frame KISS a UltimateWX. Il raggio WX predefinito è 10 km. I frame senza posizione supportata, con campi meteo non validi, oltre il raggio o ricevuti da più di due ore restano visibili nel monitor ma non vengono usati come dati meteo.
 
-Ingresso e uscita audio si selezionano separatamente. L’ingresso riguarda il percorso del ricevitore in Dire Wolf; `aplay` usa l’uscita per riprodurre l’annuncio. Per rilevare i dispositivi e riprodurre l’audio servono gli strumenti ALSA (`arecord`, `aplay`) e un comando Piper locale. La selezione dell’ingresso non configura Dire Wolf automaticamente.
+UltimateWX riceve i frame APRS da un TNC esterno tramite TCP KISS, quindi qui non serve un ingresso audio. Seleziona l’uscita dell’annuncio e regola il volume software da 0% a 100%. Per la riproduzione servono ALSA (`aplay`) e un comando Piper locale.
 
 L’editor dell’annuncio salva blocchi ordinati in JSON. Ogni blocco può essere attivato, assegnato a un tipo e a una fonte e configurato con campi o testo. Gli orari predefiniti sono disattivati. Un blocco `forecast` usa la previsione Open-Meteo per quattro ore dopo; `local-estimate` viene indicato esplicitamente come stima e omesso se mancano misure di pressione recenti.
 
@@ -49,7 +49,7 @@ Per collegare direttamente un BME280 a Raspberry Pi, abilita il profilo I²C, im
 
 **Il pannello non si apre.** Verifica che il servizio sia attivo e che la porta TCP 8080 sia raggiungibile nella rete locale. Con systemd: `systemctl status ultimatewx`; con OpenRC: `rc-service ultimatewx status`.
 
-**Non arrivano dati APRS.** Controlla l’audio del ricevitore in Dire Wolf, host e porta KISS TCP e che il TNC invii frame AX.25 UI. L’ingresso audio selezionato serve attualmente come riferimento per configurare il ricevitore; UltimateWX legge il flusso KISS risultante.
+**Non arrivano dati APRS.** Controlla l’audio del ricevitore in Dire Wolf, host e porta KISS TCP e che il TNC invii frame AX.25 UI. UltimateWX legge il flusso KISS risultante e non acquisisce direttamente l’audio del ricevitore.
 
 **Un frame vicino non viene utilizzato.** Controlla posizione, campi meteo, ora di ricezione e distanza nel monitor. Aumenta il raggio solo se corrisponde alla copertura desiderata.
 

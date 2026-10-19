@@ -38,6 +38,16 @@ func TestWeatherFrameOutsideRadiusRemainsVisibleButIneligible(t *testing.T) {
 	}
 }
 
+func TestWeatherFrameWithoutPositionRemainsVisibleButIneligible(t *testing.T) {
+	f, err := ParseTNC2("WX1ABC>APRS: t020h50b10132", time.Now().UTC(), 52.5, 21, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !f.IsWX || f.Eligible || f.Reason != "weather frame has no supported position" {
+		t.Fatalf("expected a positionless weather frame to remain visible but ineligible: %+v", f)
+	}
+}
+
 func TestNonWeatherFrameAndKISS(t *testing.T) {
 	f, err := ParseTNC2("N0CALL>APRS:hello", time.Now().UTC(), 52, 21, 10)
 	if err != nil {

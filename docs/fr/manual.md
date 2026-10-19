@@ -25,7 +25,7 @@ Open-Meteo est interrogé toutes les 15 minutes. Son API gratuite est réservée
 
 APRS se connecte à un point TCP KISS externe de Dire Wolf, généralement `127.0.0.1:8001`. Configurez Dire Wolf pour recevoir l’audio radio et transmettre les trames KISS à UltimateWX. Le rayon WX par défaut est de 10 km. Les trames sans position reconnue, contenant des champs météo invalides, hors rayon ou reçues depuis plus de deux heures restent visibles dans le moniteur, mais ne sont pas utilisées comme données météo.
 
-L’entrée et la sortie audio se choisissent séparément. L’entrée correspond au chemin récepteur de Dire Wolf ; la sortie est utilisée par `aplay` pour lire l’annonce. Les outils ALSA (`arecord`, `aplay`) et une commande Piper locale sont nécessaires pour détecter les périphériques et lire le son. Le choix de l’entrée ne configure pas Dire Wolf automatiquement.
+UltimateWX reçoit les trames APRS d’un TNC externe via TCP KISS ; aucune entrée audio n’est donc nécessaire ici. Choisissez la sortie de l’annonce et réglez son volume logiciel de 0 % à 100 %. La lecture nécessite ALSA (`aplay`) et une commande Piper locale.
 
 L’éditeur d’annonce enregistre les blocs ordonnés en JSON. Chaque bloc peut être activé, associé à un type et à une source, puis recevoir des champs ou du texte. Les horaires par défaut sont désactivés. Un bloc `forecast` utilise la prévision Open-Meteo à quatre heures ; `local-estimate` est clairement présenté comme une estimation et ignoré sans mesures de pression récentes.
 
@@ -49,7 +49,7 @@ Pour un BME280 directement connecté au Raspberry Pi, activez le profil I²C, in
 
 **Le panneau ne s’ouvre pas.** Vérifiez le service et l’accès au port TCP 8080 sur le réseau local. Avec systemd : `systemctl status ultimatewx`; avec OpenRC : `rc-service ultimatewx status`.
 
-**Aucune donnée APRS n’arrive.** Vérifiez l’audio du récepteur dans Dire Wolf, l’hôte et le port KISS TCP, ainsi que les trames AX.25 UI du TNC. La sélection d’entrée audio sert actuellement de repère pour configurer le récepteur ; UltimateWX consomme le flux KISS obtenu.
+**Aucune donnée APRS n’arrive.** Vérifiez l’audio du récepteur dans Dire Wolf, l’hôte et le port KISS TCP, ainsi que les trames AX.25 UI du TNC. UltimateWX consomme le flux KISS obtenu et ne capture pas directement l’audio du récepteur.
 
 **Une trame proche n’est pas utilisée.** Vérifiez sa position, ses champs météo, l’heure de réception et sa distance dans le moniteur. N’augmentez le rayon que si cela correspond à la couverture voulue.
 

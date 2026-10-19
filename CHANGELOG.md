@@ -2,7 +2,21 @@
 
 W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), a wersje na [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.0.3-prealpha.10] - 2026-10-19
+
+### Added
+- Dodano regulację programowej głośności komunikatu w zakresie 0–100%.
+
+### Changed
+- Usunięto nieużywany wybór wejścia audio: APRS odbierane jest z zewnętrznego TNC przez TCP KISS.
+- Status urządzeń audio pokazuje wyjścia używane do odtwarzania komunikatów.
+- Zoptymalizowano odczyt katalogu głosów, aby pobieranie z sieci nie blokowało innych operacji usługi TTS.
+- Ograniczono pamięć harmonogramu do wpisów z bieżącego dnia.
+
+### Fixed
+- Zapis konfiguracji nie jest blokowany przez natywną walidację pól w ukrytych kartach; po zapisie ustawienia BME280 są weryfikowane, a status odświeżany.
+- Niekompletne odpowiedzi prognozy nie tworzą już sztucznych odczytów równych zero.
+- Ramki APRS WX bez pozycji są widoczne w monitorze WX, ale nie zasilają pogody.
 
 ## [0.0.3-prealpha.9] - 2026-10-19
 

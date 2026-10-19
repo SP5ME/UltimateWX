@@ -25,7 +25,7 @@ Open-Meteo is queried every 15 minutes. Its free API is for non-commercial use a
 
 APRS connects to an external Dire Wolf/KISS TCP endpoint, normally `127.0.0.1:8001`. Configure Dire Wolf to use the radio receiver and forward KISS frames to UltimateWX. The default weather-source radius is 10 km. Frames without a supported position, with invalid weather fields, outside the radius or received more than two hours ago remain visible in the monitor but are excluded from weather observations.
 
-Audio input and output are selected separately. The input is the receiver-side audio device used by your Dire Wolf setup; the output is used by `aplay` for the spoken report. Linux ALSA tools (`arecord`, `aplay`) and a working local Piper command are needed for device enumeration and playback. The input choice does not configure Dire Wolf automatically.
+UltimateWX receives APRS frames from an external TNC through TCP KISS, so no audio input is needed here. Select the announcement output and set its software volume from 0% to 100%. Linux ALSA playback (`aplay`) and a working local Piper command are needed.
 
 The report editor stores ordered blocks as JSON. Each block can be enabled, assigned a type and source, and given fields or text. The schedule editor supports fixed times and hourly repetition with an offset from 0 to 59 minutes after each full hour. Enable or disable each entry individually. Default times are disabled. A `forecast` block reads the four-hour Open-Meteo forecast; a `local-estimate` block is explicitly labelled as an estimate and is omitted without fresh pressure measurements.
 
@@ -49,7 +49,7 @@ For a Raspberry Pi BME280, enable the direct I²C profile, set `/dev/i2c-1` and 
 
 **The panel does not open.** Check that the service is running and that TCP port 8080 is reachable on the local network. Use `systemctl status ultimatewx` on systemd or `rc-service ultimatewx status` on OpenRC.
 
-**There is no APRS data.** Verify Dire Wolf's receiver audio, KISS TCP host and port, and that the TNC is delivering AX.25 UI frames. The selected audio input is currently guidance for the receiver configuration; UltimateWX consumes the resulting KISS stream.
+**There is no APRS data.** Verify Dire Wolf's receiver audio, KISS TCP host and port, and that the TNC is delivering AX.25 UI frames. UltimateWX consumes the resulting KISS stream; it does not capture receiver audio itself.
 
 **A nearby frame is not used.** Check its position, weather fields, reception time and distance in the APRS monitor. Increase the configured radius only if that matches the station's intended coverage.
 

@@ -628,7 +628,7 @@ func (a *App) ttsTest(w http.ResponseWriter, r *http.Request) {
 		sample = samples["en"]
 	}
 	model := filepath.Join(a.dataDir, "voices", voice.ID+".onnx")
-	if err = audio.Speak(sample, model, c.TTSBinary, c.AudioOutput); err != nil {
+	if err = audio.Speak(sample, model, c.TTSBinary, c.AudioOutput, c.AudioVolume); err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
@@ -645,7 +645,7 @@ func (a *App) play(w http.ResponseWriter, r *http.Request) {
 	}
 	text := a.buildAnnouncement()
 	c := a.Config()
-	err := audio.Speak(text, c.TTSVoice, c.TTSBinary, c.AudioOutput)
+	err := audio.Speak(text, c.TTSVoice, c.TTSBinary, c.AudioOutput, c.AudioVolume)
 	result := "played"
 	if err != nil {
 		result = err.Error()
@@ -847,8 +847,14 @@ func (a *App) scheduleLoop(ctx context.Context) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 	done := map[string]bool{}
+	checkedDate := ""
 	for {
 		now := time.Now()
+		date := now.Format("2006-01-02")
+		if date != checkedDate {
+			done = map[string]bool{}
+			checkedDate = date
+		}
 		c := a.Config()
 		for _, s := range c.Schedules {
 			if !s.Enabled {
@@ -871,7 +877,7 @@ func (a *App) scheduleLoop(ctx context.Context) {
 			}
 			done[key] = true
 			text := a.buildAnnouncement()
-			e := audio.Speak(text, c.TTSVoice, c.TTSBinary, c.AudioOutput)
+			e := audio.Speak(text, c.TTSVoice, c.TTSBinary, c.AudioOutput, c.AudioVolume)
 			res := "played"
 			if e != nil {
 				res = e.Error()

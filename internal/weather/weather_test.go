@@ -60,6 +60,25 @@ func TestOpenMeteoProviderMapsCurrentAndFourHourForecast(t *testing.T) {
 	}
 }
 
+func TestOpenMeteoOmitsMissingForecastValues(t *testing.T) {
+	payload := `{"current":{"time":"2026-10-18T10:00","temperature_2m":11,"relative_humidity_2m":60,"apparent_temperature":10,"precipitation":0,"weather_code":2,"wind_speed_10m":5,"wind_direction_10m":90,"surface_pressure":1005},"hourly":{"time":["2026-10-18T10:00","2026-10-18T14:00"],"temperature_2m":[11,13],"precipitation_probability":[0]}}`
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(payload)), Request: r}, nil
+	})}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	got, err := (OpenMeteo{Client: client, Endpoint: "https://weather.invalid/forecast"}).Fetch(ctx, 52, 21, "metric")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Forecast) != 1 {
+		t.Fatalf("expected only the available temperature, got %+v", got.Forecast)
+	}
+	if got.Forecast[0].Parameter != "temperature" || got.Forecast[0].Value != 13 {
+		t.Fatalf("missing values were not handled correctly: %+v", got.Forecast)
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }

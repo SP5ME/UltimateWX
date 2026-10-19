@@ -25,7 +25,7 @@ Open-Meteo jest odpytywane co 15 minut. Darmowe API jest przeznaczone do użytku
 
 APRS łączy się z zewnętrznym punktem KISS TCP Dire Wolf, zwykle `127.0.0.1:8001`. Skonfiguruj Dire Wolf, aby odbierał dźwięk z radia i przekazywał ramki KISS do UltimateWX. Domyślny promień kwalifikowania źródła WX to 10 km. Ramki bez obsługiwanej pozycji, z błędnymi polami pogody, poza promieniem lub odebrane ponad dwie godziny temu pozostają w monitorze, ale nie zasilają odczytów pogodowych.
 
-Wejście i wyjście audio wybiera się osobno. Wejście dotyczy toru odbiorczego skonfigurowanego w Dire Wolf, a wyjście służy do odtwarzania komunikatu przez `aplay`. Do wykrywania urządzeń i odtwarzania potrzebne są narzędzia ALSA (`arecord`, `aplay`) oraz lokalne polecenie Piper. Wybór wejścia w panelu nie konfiguruje automatycznie Dire Wolf.
+UltimateWX odbiera ramki APRS z zewnętrznego TNC przez TCP KISS, więc wejście audio nie jest tu potrzebne. Wybierz wyjście komunikatu i ustaw jego programową głośność od 0% do 100%. Do odtwarzania wymagane są ALSA (`aplay`) i lokalne polecenie Piper.
 
 Edytor komunikatu zapisuje uporządkowane bloczki w JSON. Każdy można włączyć lub wyłączyć, określić jego typ i źródło, pola albo tekst. W edytorze harmonogramu można dodać stałe godziny albo cykl co godzinę z przesunięciem od 0 do 59 minut po pełnej godzinie. Każdą pozycję można osobno włączyć lub wyłączyć. Domyślne pory są wyłączone. Blok `forecast` korzysta z prognozy Open-Meteo za cztery godziny; `local-estimate` jest jawnie oznaczony jako szacunek i pomijany bez świeżych pomiarów ciśnienia.
 
@@ -82,7 +82,7 @@ BME280 mierzy ciśnienie stacyjne. UltimateWX osobno wylicza ciśnienie zredukow
 
 **Panel się nie otwiera.** Sprawdź działanie usługi i dostępność portu TCP 8080 w sieci lokalnej. Dla systemd użyj `systemctl status ultimatewx`, a dla OpenRC `rc-service ultimatewx status`.
 
-**Brak danych APRS.** Sprawdź audio odbiornika w Dire Wolf, host i port KISS TCP oraz to, czy TNC przekazuje ramki AX.25 UI. Wybrane wejście audio jest obecnie wskazówką dla konfiguracji odbiornika; UltimateWX odbiera wynikowy strumień KISS.
+**Brak danych APRS.** Sprawdź audio odbiornika w Dire Wolf, host i port KISS TCP oraz to, czy TNC przekazuje ramki AX.25 UI. UltimateWX odbiera wynikowy strumień KISS i samodzielnie nie przechwytuje audio odbiornika.
 
 **Ramka z bliska nie jest używana.** W monitorze sprawdź pozycję, pola pogody, czas odebrania i odległość. Zwiększ promień tylko wtedy, gdy odpowiada to planowanemu zasięgowi stacji.
 
