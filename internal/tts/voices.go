@@ -200,7 +200,7 @@ func nextPage(link string) string {
 	return u.String()
 }
 
-var licenseRE = regexp.MustCompile(`(?im)^\s*(?:[-*]\s*)?license\s*:\s*(CC[- ]BY[- ]4\.0|CC[- ]BY[- ]SA[- ]4\.0|CC0[- ]1\.0|Apache[- ]2\.0|MIT|GPL[- ]3\.0(?:-or-later)?)\s*$`)
+var licenseRE = regexp.MustCompile(`(?im)^\s*(?:#{1,6}\s*)?(?:[-*]\s*)?license\s*:?\s*(?:\r?\n\s*)?(?:\[)?(CC[- ]BY[- ]4\.0|CC[- ]BY[- ]SA[- ]4\.0|CC0[- ]1\.0|Apache[- ]2\.0|MIT|GPL[- ]3\.0(?:-or-later)?)(?:\]\([^)]*\))?\s*$`)
 
 var genderRE = regexp.MustCompile(`(?im)^\s*(?:[-*]\s*)?(?:voice\s+)?gender\s*:\s*(female|male)\s*$`)
 
