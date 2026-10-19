@@ -4,6 +4,11 @@ W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na 
 
 ## [Unreleased]
 
+## [0.0.5-prealpha.2] - 2026-10-19
+
+### Added
+- Dodano wybór zainstalowanego głosu oraz możliwość jego usunięcia z panelu. Usunięcie aktywnego głosu czyści również jego wybór i język komunikatu.
+
 ## [0.0.5-prealpha.1] - 2026-10-19
 
 ### Added

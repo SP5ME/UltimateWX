@@ -145,6 +145,8 @@ func (a *App) routes() {
 	a.mux.HandleFunc("/api/tts/catalog", a.protect(a.ttsCatalog))
 	a.mux.HandleFunc("/api/tts/installed", a.protect(a.ttsInstalled))
 	a.mux.HandleFunc("/api/tts/download", a.protect(a.ttsDownload))
+	a.mux.HandleFunc("/api/tts/select", a.protect(a.ttsSelect))
+	a.mux.HandleFunc("/api/tts/delete", a.protect(a.ttsDelete))
 	a.mux.HandleFunc("/api/tts/test", a.protect(a.ttsTest))
 }
 func (a *App) index(w http.ResponseWriter, r *http.Request) {
@@ -605,6 +607,91 @@ func (a *App) ttsInstalled(w http.ResponseWriter, r *http.Request) {
 		voices[i].Active = filepath.Clean(filepath.Join(a.dataDir, "voices", voices[i].ID+".onnx")) == activePath
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"voices": voices})
+}
+func (a *App) ttsSelect(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		method(w)
+		return
+	}
+	var req struct {
+		ID string `json:"id"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	voices, err := a.voices.InstalledVoices()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	for _, voice := range voices {
+		if voice.ID != req.ID {
+			continue
+		}
+		c := a.Config()
+		c.TTSVoice = filepath.Join(a.dataDir, "voices", voice.ID+".onnx")
+		c.Locale = voice.Language
+		if err := a.setConfig(c); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "path": c.TTSVoice, "language": c.Locale})
+		return
+	}
+	writeError(w, http.StatusNotFound, "voice is not installed")
+}
+func (a *App) ttsDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		method(w)
+		return
+	}
+	var req struct {
+		ID string `json:"id"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	voices, err := a.voices.InstalledVoices()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	var voiceID string
+	for _, voice := range voices {
+		if voice.ID == req.ID {
+			voiceID = voice.ID
+			break
+		}
+	}
+	if voiceID == "" {
+		writeError(w, http.StatusNotFound, "voice is not installed")
+		return
+	}
+
+	c := a.Config()
+	modelPath := filepath.Join(a.dataDir, "voices", voiceID+".onnx")
+	active := c.TTSVoice != "" && filepath.Clean(c.TTSVoice) == filepath.Clean(modelPath)
+	if active {
+		previous := c
+		c.TTSVoice = ""
+		c.Locale = ""
+		if err := a.setConfig(c); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if err := a.voices.Delete(voiceID); err != nil {
+			if restoreErr := a.setConfig(previous); restoreErr != nil {
+				writeError(w, http.StatusInternalServerError, fmt.Sprintf("delete voice: %v; restore configuration: %v", err, restoreErr))
+				return
+			}
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	} else if err := a.voices.Delete(voiceID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "active_cleared": active})
 }
 func (a *App) ttsDownload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {

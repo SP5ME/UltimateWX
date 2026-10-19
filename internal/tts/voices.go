@@ -428,4 +428,31 @@ func (s *Service) InstalledVoices() ([]Voice, error) {
 	}
 	return voices, nil
 }
+
+// Delete removes a voice and its downloaded metadata after confirming that the
+// identifier belongs to an installed model in this service's voice directory.
+func (s *Service) Delete(id string) error {
+	voices, err := s.InstalledVoices()
+	if err != nil {
+		return err
+	}
+	installed := false
+	for _, voice := range voices {
+		if voice.ID == id {
+			installed = true
+			break
+		}
+	}
+	if !installed {
+		return fmt.Errorf("voice is not installed")
+	}
+
+	modelPath := filepath.Join(s.root, id+".onnx")
+	for _, path := range []string{modelPath + ".json", filepath.Join(s.root, id+".MODEL_CARD"), filepath.Join(s.root, id+".license.json"), modelPath} {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
+}
 func EncodeLangURL(s string) string { return url.QueryEscape(s) }
