@@ -78,6 +78,7 @@ jobs:
           git -C espeak-ng-src fetch --depth 1 origin "$ESPEAK_COMMIT"
           git -C espeak-ng-src checkout --detach FETCH_HEAD
           cp -a espeak-ng-src piper-phonemize-src/espeak-ng
+          printf '\n!espeak-ng/\n' >> piper-phonemize-src/.dockerignore
           python3 - <<'PY'
           from pathlib import Path
 
@@ -97,6 +98,7 @@ jobs:
           PHONEMIZE_PACKAGE=piper-phonemize-src/dist/libpiper_phonemize-armv7.tar.gz
           test -s "$PHONEMIZE_PACKAGE"
           cp "$PHONEMIZE_PACKAGE" piper-src/libpiper_phonemize-armv7.tar.gz
+          printf '\n!libpiper_phonemize-armv7.tar.gz\n' >> piper-src/.dockerignore
           python3 - <<'PY'
           from pathlib import Path
           dockerfile = Path("piper-src/Dockerfile")

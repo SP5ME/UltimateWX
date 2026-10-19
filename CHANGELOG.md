@@ -4,11 +4,14 @@ W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na 
 
 ## [Unreleased]
 
-## [0.0.6-prealpha.2] - 2026-10-19
+## [0.0.6-prealpha.3] - 2026-10-19
 
 ### Added
 - W wydaniu dodano eksperymentalny Piper ARMv7 wraz z paczką źródeł zależności, informacjami licencyjnymi i sumami kontrolnymi.
 - Build Piper-phonemize przypina źródło eSpeak NG do konkretnego commita zamiast pobierać ruchomą gałąź.
+
+### Fixed
+- Uzupełniono reguły `.dockerignore`, aby źródła eSpeak i lokalnie zbudowane archiwum fonemizacji były dostępne w kontekstach Docker Buildx.
 
 ## [0.0.6-prealpha.1] - 2026-10-19
 
