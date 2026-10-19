@@ -150,6 +150,12 @@ func compareVersions(a, b string) (int, bool) {
 			if len(aPre[i]) > len(bPre[i]) {
 				return 1, true
 			}
+			if aPre[i] < bPre[i] {
+				return -1, true
+			}
+			if aPre[i] > bPre[i] {
+				return 1, true
+			}
 		case aNumeric && !bNumeric:
 			return -1, true
 		case !aNumeric && bNumeric:

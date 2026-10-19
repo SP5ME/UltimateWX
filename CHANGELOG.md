@@ -4,6 +4,11 @@ W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na 
 
 ## [Unreleased]
 
+## [0.0.6-prealpha.1] - 2026-10-19
+
+### Fixed
+- Naprawiono porównywanie numerów wydań przedpremierowych, aby aktualizacja do kolejnego numeru, np. `.2` po `.1`, była wykrywana poprawnie.
+
 ## [0.0.5-prealpha.2] - 2026-10-19
 
 ### Added
