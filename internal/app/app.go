@@ -135,6 +135,7 @@ func (a *App) routes() {
 	a.mux.HandleFunc("/api/stats", a.protect(a.stats))
 	a.mux.HandleFunc("/api/aprs", a.protect(a.aprsFrames))
 	a.mux.HandleFunc("/api/aprs/test", a.setupAccess(a.testAPRSConnection))
+	a.mux.HandleFunc("/api/bme/test", a.setupAccess(a.testBMEConnection))
 	a.mux.HandleFunc("/api/audio", a.setupAccess(a.audioDevices))
 	a.mux.HandleFunc("/api/announcement/preview", a.protect(a.preview))
 	a.mux.HandleFunc("/api/announcement/play", a.protect(a.play))
@@ -487,6 +488,31 @@ func (a *App) testAPRSConnection(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = conn.Close()
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "message": "TCP connection established"})
+}
+
+func (a *App) testBMEConnection(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		method(w)
+		return
+	}
+	var request struct {
+		Device  string `json:"device"`
+		Address int    `json:"address"`
+	}
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	request.Device = strings.TrimSpace(request.Device)
+	if request.Device == "" || (request.Address != 0x76 && request.Address != 0x77) {
+		writeError(w, http.StatusBadRequest, "Enter an I²C device and address 118 (0x76) or 119 (0x77).")
+		return
+	}
+	temperature, humidity, pressure, err := bme280.Read(request.Device, uint16(request.Address))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]float64{"temperature_c": temperature, "humidity_percent": humidity, "pressure_hpa": pressure})
 }
 func (a *App) audioDevices(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, audio.List()) }
 func (a *App) ttsCatalog(w http.ResponseWriter, r *http.Request) {

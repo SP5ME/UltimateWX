@@ -4,6 +4,16 @@ W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na 
 
 ## [Unreleased]
 
+## [0.0.3-prealpha.9] - 2026-10-19
+
+### Added
+- Dodano szeroki pasek bieżących odczytów na stronie Status z nazwą źródła i czasem pomiaru.
+- Dodano natychmiastowy test odczytu BME280 z wynikami temperatury, wilgotności i ciśnienia.
+
+### Changed
+- Przeniesiono stan BME280 do listy usług na stronie Status.
+- Przeniesiono potwierdzenie zapisu konfiguracji nad przycisk zapisu, aby było widoczne bez przewijania dalej.
+
 ## [0.0.3-prealpha.8] - 2026-10-19
 
 ### Added
