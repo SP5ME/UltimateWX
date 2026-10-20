@@ -12,15 +12,29 @@ import (
 )
 
 type Frame struct {
-	Raw        string                `json:"raw"`
-	Station    string                `json:"station"`
-	ReceivedAt time.Time             `json:"received_at"`
-	IsWX       bool                  `json:"is_wx"`
-	Eligible   bool                  `json:"eligible"`
-	Reason     string                `json:"reason"`
-	Latitude   float64               `json:"latitude,omitempty"`
-	Longitude  float64               `json:"longitude,omitempty"`
-	Data       []weather.Observation `json:"data,omitempty"`
+	Raw         string                `json:"raw"`
+	Station     string                `json:"station"`
+	ReceivedAt  time.Time             `json:"received_at"`
+	IsWX        bool                  `json:"is_wx"`
+	Eligible    bool                  `json:"eligible"`
+	Blacklisted bool                  `json:"blacklisted,omitempty"`
+	Reason      string                `json:"reason"`
+	Latitude    float64               `json:"latitude,omitempty"`
+	Longitude   float64               `json:"longitude,omitempty"`
+	Data        []weather.Observation `json:"data,omitempty"`
+}
+
+func ApplyBlacklist(frame Frame, callsigns []string) Frame {
+	station := strings.ToUpper(strings.TrimSpace(frame.Station))
+	for _, callsign := range callsigns {
+		if station != "" && station == strings.ToUpper(strings.TrimSpace(callsign)) {
+			frame.Blacklisted = true
+			frame.Eligible = false
+			frame.Reason = "station is on the APRS blacklist"
+			return frame
+		}
+	}
+	return frame
 }
 
 var positionRE = regexp.MustCompile(`([0-9]{4}\.[0-9]{2})([NS])[/\\]([0-9]{5}\.[0-9]{2})([EW])`)

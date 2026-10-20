@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -30,6 +32,7 @@ import (
 	"github.com/ultimatewx/ultimatewx/internal/store"
 	"github.com/ultimatewx/ultimatewx/internal/tts"
 	"github.com/ultimatewx/ultimatewx/internal/updater"
+	"github.com/ultimatewx/ultimatewx/internal/warnings"
 	"github.com/ultimatewx/ultimatewx/internal/weather"
 )
 
@@ -38,6 +41,11 @@ type App struct {
 	cfg                 config.Config
 	cfgMu               sync.RWMutex
 	history             *store.Store
+	speechMu            sync.Mutex
+	warningMu           sync.RWMutex
+	warningError        string
+	warningUpdatedAt    time.Time
+	warningRefresh      chan struct{}
 	bmeStatusMu         sync.RWMutex
 	bmeLastError        string
 	voices              *tts.Service
@@ -58,7 +66,7 @@ func New(configPath, dataDir string) (*App, error) {
 	if e != nil {
 		return nil, e
 	}
-	a := &App{configPath: configPath, dataDir: dataDir, cfg: c, history: s, voices: tts.New(filepath.Join(dataDir, "voices")), sessions: map[string]time.Time{}, mux: http.NewServeMux()}
+	a := &App{configPath: configPath, dataDir: dataDir, cfg: c, history: s, voices: tts.New(filepath.Join(dataDir, "voices")), sessions: map[string]time.Time{}, mux: http.NewServeMux(), warningRefresh: make(chan struct{}, 1)}
 	a.routes()
 	return a, nil
 }
@@ -67,12 +75,20 @@ func (a *App) setConfig(c config.Config) error {
 	if e := config.Validate(c); e != nil {
 		return e
 	}
+	previous := a.Config()
 	a.cfgMu.Lock()
-	defer a.cfgMu.Unlock()
 	if e := config.Save(a.configPath, c); e != nil {
+		a.cfgMu.Unlock()
 		return e
 	}
 	a.cfg = c
+	a.cfgMu.Unlock()
+	if previous.WarningsEnabled != c.WarningsEnabled || previous.Latitude != c.Latitude || previous.Longitude != c.Longitude || strings.Join(previous.WarningTERYT, ",") != strings.Join(c.WarningTERYT, ",") {
+		select {
+		case a.warningRefresh <- struct{}{}:
+		default:
+		}
+	}
 	return nil
 }
 func (a *App) Handler() http.Handler { return a.security(a.mux) }
@@ -85,6 +101,8 @@ func (a *App) Run(ctx context.Context) {
 	go a.mqttLoop(ctx)
 	go a.bmeLoop(ctx)
 	go a.maintenanceLoop(ctx)
+	go a.warningFetchLoop(ctx)
+	go a.warningSpeakLoop(ctx)
 	<-ctx.Done()
 }
 func (a *App) weatherLoop(ctx context.Context) {
@@ -133,6 +151,8 @@ func (a *App) routes() {
 	a.mux.HandleFunc("/api/config", a.setupAccess(a.configuration))
 	a.mux.HandleFunc("/api/backup", a.protect(a.configurationBackup))
 	a.mux.HandleFunc("/api/weather", a.protect(a.weatherStatus))
+	a.mux.HandleFunc("/api/warnings", a.protect(a.warningStatus))
+	a.mux.HandleFunc("/api/warnings/refresh", a.protect(a.refreshWarnings))
 	a.mux.HandleFunc("/api/stats", a.protect(a.stats))
 	a.mux.HandleFunc("/api/aprs", a.protect(a.aprsFrames))
 	a.mux.HandleFunc("/api/aprs/test", a.setupAccess(a.testAPRSConnection))
@@ -391,7 +411,7 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 	s := a.snapshot
 	a.snapMu.RUnlock()
 	var bmeLastReading time.Time
-	for _, observation := range a.history.Latest() {
+	for _, observation := range a.history.LatestExcludingStations(c.APRSBlacklist) {
 		if observation.Source == "bme280" && observation.Parameter == "temperature" {
 			bmeLastReading = observation.ObservedAt
 			break
@@ -401,7 +421,10 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 	a.bmeStatusMu.RLock()
 	bmeError := a.bmeLastError
 	a.bmeStatusMu.RUnlock()
-	writeJSON(w, 200, map[string]any{"version": updater.Version, "location": c.LocationName, "weather_updated_at": s.UpdatedAt, "weather_error": s.Error, "sources": map[string]any{"open_meteo": s.UpdatedAt.IsZero() || time.Since(s.UpdatedAt) > 30*time.Minute, "aprs": c.APRSHost == "", "mqtt": c.MQTTBroker == "", "home_assistant": c.HAURL == "", "serial": c.SerialPort == "", "bme280": !bmeReceiving}, "bme280": map[string]any{"enabled": c.BMEEnabled, "receiving": bmeReceiving, "last_reading_at": bmeLastReading, "error": bmeError}, "tts_configured": c.TTSVoice != "", "audio": audio.List(), "uptime_seconds": int64(time.Since(startedAt).Seconds())})
+	a.warningMu.RLock()
+	warningError, warningUpdatedAt := a.warningError, a.warningUpdatedAt
+	a.warningMu.RUnlock()
+	writeJSON(w, 200, map[string]any{"version": updater.Version, "location": c.LocationName, "weather_updated_at": s.UpdatedAt, "weather_error": s.Error, "sources": map[string]any{"open_meteo": s.UpdatedAt.IsZero() || time.Since(s.UpdatedAt) > 30*time.Minute, "aprs": c.APRSHost == "", "mqtt": c.MQTTBroker == "", "home_assistant": c.HAURL == "", "serial": c.SerialPort == "", "bme280": !bmeReceiving}, "bme280": map[string]any{"enabled": c.BMEEnabled, "receiving": bmeReceiving, "last_reading_at": bmeLastReading, "error": bmeError}, "warnings": map[string]any{"enabled": c.WarningsEnabled, "last_updated_at": warningUpdatedAt, "error": warningError}, "tts_configured": c.TTSVoice != "", "audio": audio.List(), "uptime_seconds": int64(time.Since(startedAt).Seconds())})
 }
 func (a *App) configuration(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -494,7 +517,50 @@ func (a *App) weatherStatus(w http.ResponseWriter, r *http.Request) {
 	s := a.snapshot
 	a.snapMu.RUnlock()
 	days := a.Config().HistoryDays
-	writeJSON(w, 200, map[string]any{"snapshot": s, "latest": a.history.Latest(), "local_estimate": estimate(a.history.Observations(days))})
+	writeJSON(w, 200, map[string]any{"snapshot": s, "latest": a.history.LatestExcludingStations(a.Config().APRSBlacklist), "local_estimate": estimate(excludeBlacklistedAPRS(a.history.Observations(days), a.Config().APRSBlacklist))})
+}
+func (a *App) warningStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		method(w)
+		return
+	}
+	if !a.Config().WarningsEnabled {
+		writeJSON(w, http.StatusOK, map[string]any{"active": []warnings.Alert{}, "upcoming": []warnings.Alert{}, "updated_at": time.Time{}, "error": "", "source": "IMGW-PIB"})
+		return
+	}
+	a.warningMu.RLock()
+	updatedAt, err := a.warningUpdatedAt, a.warningError
+	a.warningMu.RUnlock()
+	now := time.Now().UTC()
+	items := a.history.Warnings()
+	active := make([]warnings.Alert, 0, len(items))
+	upcoming := make([]warnings.Alert, 0, len(items))
+	for _, item := range items {
+		if !item.ValidTo.After(now) {
+			continue
+		}
+		if item.ValidFrom.After(now) {
+			upcoming = append(upcoming, item)
+		} else {
+			active = append(active, item)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"active": active, "upcoming": upcoming, "updated_at": updatedAt, "error": err, "source": "IMGW-PIB"})
+}
+func (a *App) refreshWarnings(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		method(w)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	if err := a.fetchWarnings(ctx); err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	statusRequest := r.Clone(ctx)
+	statusRequest.Method = http.MethodGet
+	a.warningStatus(w, statusRequest)
 }
 func (a *App) stats(w http.ResponseWriter, r *http.Request) {
 	c := a.Config()
@@ -517,7 +583,11 @@ func (a *App) aprsFrames(w http.ResponseWriter, r *http.Request) {
 		limit = 100
 	}
 	wx := r.URL.Query().Get("wx_only") == "true"
-	writeJSON(w, 200, map[string]any{"frames": a.history.Frames(limit, wx)})
+	frames := a.history.Frames(limit, wx)
+	for i := range frames {
+		frames[i] = aprs.ApplyBlacklist(frames[i], a.Config().APRSBlacklist)
+	}
+	writeJSON(w, 200, map[string]any{"frames": frames})
 }
 func (a *App) testAPRSConnection(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -788,7 +858,9 @@ func (a *App) play(w http.ResponseWriter, r *http.Request) {
 	}
 	text := a.buildAnnouncement()
 	c := a.Config()
+	a.speechMu.Lock()
 	err := audio.Speak(text, c.TTSVoice, c.TTSBinary, c.AudioOutput, c.AudioVolume)
+	a.speechMu.Unlock()
 	result := "played"
 	if err != nil {
 		result = err.Error()
@@ -846,7 +918,7 @@ func (a *App) update(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) buildAnnouncement() string {
 	c := a.Config()
-	latest := a.history.Latest()
+	latest := a.history.LatestExcludingStations(c.APRSBlacklist)
 	byKey := map[string]weather.Observation{}
 	for _, o := range latest {
 		byKey[o.Parameter+"|"+o.Source] = o
@@ -882,12 +954,35 @@ func (a *App) buildAnnouncement() string {
 				}
 			}
 		case "local-estimate":
-			if estimateText := estimateSpeech(estimate(a.history.Observations(c.HistoryDays)), c.Locale); estimateText != "" {
+			if estimateText := estimateSpeech(estimate(excludeBlacklistedAPRS(a.history.Observations(c.HistoryDays), c.APRSBlacklist)), c.Locale); estimateText != "" {
 				out = append(out, estimateText)
 			}
 		}
 	}
 	return strings.Join(out, " ")
+}
+
+func excludeBlacklistedAPRS(observations []weather.Observation, blacklist []string) []weather.Observation {
+	if len(blacklist) == 0 {
+		return observations
+	}
+	filtered := make([]weather.Observation, 0, len(observations))
+	for _, observation := range observations {
+		if strings.EqualFold(observation.Source, "aprs") && isBlacklistedCallsign(observation.Station, blacklist) {
+			continue
+		}
+		filtered = append(filtered, observation)
+	}
+	return filtered
+}
+
+func isBlacklistedCallsign(station string, blacklist []string) bool {
+	for _, callsign := range blacklist {
+		if station != "" && strings.EqualFold(strings.TrimSpace(station), strings.TrimSpace(callsign)) {
+			return true
+		}
+	}
+	return false
 }
 
 func renderStationTemplate(text, callsign, locator string) string {
@@ -983,6 +1078,156 @@ func sortObs(o []weather.Observation) {
 		}
 	}
 }
+
+func (a *App) warningFetchLoop(ctx context.Context) {
+	if err := a.fetchWarnings(ctx); err != nil {
+		log.Printf("IMGW warnings update: %v", err)
+	}
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		case <-a.warningRefresh:
+		}
+		if err := a.fetchWarnings(ctx); err != nil {
+			log.Printf("IMGW warnings update: %v", err)
+		}
+	}
+}
+
+func (a *App) fetchWarnings(ctx context.Context) error {
+	c := a.Config()
+	if !c.WarningsEnabled {
+		if err := a.history.ReplaceWarnings(nil); err != nil {
+			return err
+		}
+		a.setWarningHealth(time.Now().UTC(), "")
+		return nil
+	}
+	if len(c.WarningTERYT) == 0 {
+		err := errors.New("Ustaw kody TERYT powiatów, dla których mają być pobierane ostrzeżenia.")
+		a.setWarningHealth(time.Time{}, err.Error())
+		return err
+	}
+	requestCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	items, err := (warnings.IMGW{}).Fetch(requestCtx)
+	if err != nil {
+		a.setWarningHealth(time.Time{}, err.Error())
+		return err
+	}
+	now := time.Now().UTC()
+	matched := make([]warnings.Alert, 0, len(items))
+	for _, item := range items {
+		if warnings.MatchesArea(item, c.WarningTERYT) && item.ValidTo.After(now) {
+			matched = append(matched, item)
+		}
+	}
+	if err := a.history.ReplaceWarnings(matched); err != nil {
+		a.setWarningHealth(time.Time{}, err.Error())
+		return err
+	}
+	a.setWarningHealth(now, "")
+	return nil
+}
+
+func (a *App) setWarningHealth(updated time.Time, message string) {
+	a.warningMu.Lock()
+	if !updated.IsZero() {
+		a.warningUpdatedAt = updated
+	}
+	a.warningError = message
+	a.warningMu.Unlock()
+}
+
+func (a *App) warningSpeakLoop(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+		c := a.Config()
+		if !c.WarningsEnabled || c.TTSVoice == "" {
+			continue
+		}
+		now := time.Now().UTC()
+		for _, item := range a.history.Warnings() {
+			if now.Before(item.ValidFrom) || !now.Before(item.ValidTo) {
+				continue
+			}
+			id := item.ID
+			signature := warningSignature(item)
+			previous, exists := a.history.WarningAnnouncement(id)
+			interval := warningRepeatInterval(c, item.Severity)
+			if exists && previous.Signature == signature && now.Sub(previous.At) < interval {
+				continue
+			}
+			text := warningSpeech(item, c.Locale)
+			a.speechMu.Lock()
+			err := audio.Speak(text, c.TTSVoice, c.TTSBinary, c.AudioOutput, c.AudioVolume)
+			a.speechMu.Unlock()
+			result := "played"
+			if err != nil {
+				result = err.Error()
+				log.Printf("scheduled warning audio: %v", err)
+			} else if err := a.history.SetWarningAnnouncement(id, store.WarningAnnouncement{Signature: signature, At: now}); err != nil {
+				log.Printf("save warning announcement state: %v", err)
+			}
+			_ = a.history.AddPlayback(store.Playback{At: now, Text: text, Result: result})
+		}
+	}
+}
+
+func warningRepeatInterval(c config.Config, severity int) time.Duration {
+	minutes := c.WarningRepeat1
+	if severity == 2 {
+		minutes = c.WarningRepeat2
+	} else if severity >= 3 {
+		minutes = c.WarningRepeat3
+	}
+	return time.Duration(minutes) * time.Minute
+}
+
+func warningSignature(item warnings.Alert) string {
+	value := fmt.Sprintf("%s|%d|%d|%s|%s|%s|%s|%v", item.Event, item.Severity, item.Probability, item.ValidFrom.UTC().Format(time.RFC3339), item.ValidTo.UTC().Format(time.RFC3339), item.Description, item.Comment, item.AreaCodes)
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(value)))
+}
+
+func warningSpeech(item warnings.Alert, locale string) string {
+	level := fmt.Sprintf("%d", item.Severity)
+	location, err := time.LoadLocation("Europe/Warsaw")
+	if err != nil {
+		location = time.UTC
+	}
+	when := item.ValidFrom.In(location).Format("02.01.2006 15:04") + " – " + item.ValidTo.In(location).Format("02.01.2006 15:04")
+	heading := "Ostrzeżenie IMGW, stopień "
+	if locale == "en" {
+		heading = "IMGW weather warning, level "
+	} else if locale == "de" {
+		heading = "IMGW-Wetterwarnung, Stufe "
+	} else if locale == "fr" {
+		heading = "Alerte météo IMGW, niveau "
+	} else if locale == "es" {
+		heading = "Aviso meteorológico de IMGW, nivel "
+	} else if locale == "it" {
+		heading = "Avviso meteorologico IMGW, livello "
+	}
+	text := heading + level + ". " + item.Event + ". Obowiązuje od " + when + "."
+	if item.Probability > 0 {
+		text += fmt.Sprintf(" Prawdopodobieństwo: %d procent.", item.Probability)
+	}
+	if item.Description != "" {
+		text += " " + item.Description
+	}
+	return text
+}
+
 func urlQuery(s string) string { return url.QueryEscape(s) }
 func runtimeArch() string      { return runtime.GOARCH }
 
@@ -1020,7 +1265,9 @@ func (a *App) scheduleLoop(ctx context.Context) {
 			}
 			done[key] = true
 			text := a.buildAnnouncement()
+			a.speechMu.Lock()
 			e := audio.Speak(text, c.TTSVoice, c.TTSBinary, c.AudioOutput, c.AudioVolume)
+			a.speechMu.Unlock()
 			res := "played"
 			if e != nil {
 				res = e.Error()
@@ -1091,6 +1338,7 @@ func (a *App) aprsLoop(ctx context.Context) {
 										cfg := a.Config()
 										f, parseErr := aprs.ParseTNC2(line, time.Now(), cfg.Latitude, cfg.Longitude, cfg.APRSRadiusKM)
 										if parseErr == nil {
+											f = aprs.ApplyBlacklist(f, cfg.APRSBlacklist)
 											_ = a.history.AddFrame(f)
 											if f.Eligible {
 												for _, o := range f.Data {

@@ -13,6 +13,8 @@ UltimateWX: GNU GPL, wersja 3 lub późniejsza (`GPL-3.0-or-later`). Backend uż
 ## Dane i usługi
 
 - Open-Meteo: odpowiedzi pogodowe na wolnym API podlegają CC BY 4.0, wymagają atrybucji; darmowa usługa API jest ograniczona do użytku niekomercyjnego. Sprawdź bieżące [warunki Open-Meteo](https://open-meteo.com/en/terms) przed wdrożeniem.
+- IMGW-PIB: ostrzeżenia są pobierane z [publicznego API IMGW](https://danepubliczne.imgw.pl/apiinfo) (`warningsmeteo`). Wymagana atrybucja źródła danych: „Źródłem pochodzenia danych jest Instytut Meteorologii i Gospodarki Wodnej – Państwowy Instytut Badawczy”. Przed wdrożeniem należy sprawdzić aktualne warunki udostępniania danych IMGW.
+- PL-WARN/CAWF: UltimateWX nie kopiuje kodu projektu PL-WARN i nie publikuje przez ten kanał. Ewentualna integracja wymaga potwierdzenia pełnej specyfikacji CAWF oraz warunków użycia przed implementacją.
 - Home Assistant, MQTT, APRS i czujniki użytkownika są źródłami konfigurowanymi lokalnie.
 
 ## TTS

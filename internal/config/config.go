@@ -44,6 +44,12 @@ type Config struct {
 	StationCallsign string     `json:"station_callsign"`
 	StationLocator  string     `json:"station_locator"`
 	APRSRadiusKM    float64    `json:"aprs_radius_km"`
+	APRSBlacklist   []string   `json:"aprs_blacklist"`
+	WarningsEnabled bool       `json:"warnings_enabled"`
+	WarningTERYT    []string   `json:"warning_teryt_codes"`
+	WarningRepeat1  int        `json:"warning_repeat_level_1_minutes"`
+	WarningRepeat2  int        `json:"warning_repeat_level_2_minutes"`
+	WarningRepeat3  int        `json:"warning_repeat_level_3_minutes"`
 	WeatherSource   string     `json:"weather_source"`
 	APRSHost        string     `json:"aprs_host"`
 	APRSPort        int        `json:"aprs_port"`
@@ -70,7 +76,7 @@ type Config struct {
 }
 
 func Defaults() Config {
-	return Config{Latitude: 0, Longitude: 0, LocationName: "", Units: "metric", Locale: "", APRSRadiusKM: 10, WeatherSource: "auto", APRSPort: 8001, I2CDevice: "/dev/i2c-1", I2CAddress: 0x76,
+	return Config{Latitude: 0, Longitude: 0, LocationName: "", Units: "metric", Locale: "", APRSRadiusKM: 10, WarningsEnabled: true, WarningRepeat1: 60, WarningRepeat2: 30, WarningRepeat3: 15, WeatherSource: "auto", APRSPort: 8001, I2CDevice: "/dev/i2c-1", I2CAddress: 0x76,
 		MQTTTopic: "ultimatewx/+/weather", SerialBaud: 9600, HistoryDays: 7, AudioVolume: 100,
 		Schedules: []Schedule{{Time: "07:00"}, {Time: "12:00"}, {Time: "18:00"}},
 		Blocks: []Block{{ID: "greeting", Enabled: true, Title: "Powitanie", Kind: "text", Text: "Komunikat pogodowy UltimateWX."},
@@ -112,6 +118,33 @@ func Validate(c Config) error {
 	}
 	if c.APRSRadiusKM < 0 || c.APRSRadiusKM > 1000 {
 		return errors.New("APRS radius must be 0..1000 km")
+	}
+	if len(c.APRSBlacklist) > 100 {
+		return errors.New("at most 100 APRS callsigns may be blacklisted")
+	}
+	for _, callsign := range c.APRSBlacklist {
+		callsign = strings.TrimSpace(callsign)
+		if callsign == "" || len(callsign) > 9 || strings.ContainsAny(callsign, ",; \t\r\n") {
+			return errors.New("APRS blacklist entries must be callsigns, separated into individual entries")
+		}
+	}
+	if len(c.WarningTERYT) > 20 {
+		return errors.New("at most 20 warning TERYT codes are allowed")
+	}
+	for _, code := range c.WarningTERYT {
+		if len(code) != 4 {
+			return errors.New("warning TERYT codes must contain exactly four digits")
+		}
+		for _, digit := range code {
+			if digit < '0' || digit > '9' {
+				return errors.New("warning TERYT codes must contain exactly four digits")
+			}
+		}
+	}
+	for _, minutes := range []int{c.WarningRepeat1, c.WarningRepeat2, c.WarningRepeat3} {
+		if minutes < 5 || minutes > 1440 {
+			return errors.New("warning repeat intervals must be between 5 and 1440 minutes")
+		}
 	}
 	if c.WeatherSource != "" && c.WeatherSource != "auto" && c.WeatherSource != "open-meteo" && c.WeatherSource != "aprs" && c.WeatherSource != "bme280" && c.WeatherSource != "mqtt" && c.WeatherSource != "home-assistant" && c.WeatherSource != "serial" {
 		return errors.New("unsupported preferred weather source")

@@ -26,6 +26,12 @@ Zakładka **Status** pokazuje skonfigurowane źródła, urządzenia audio, czas 
 
 Open-Meteo jest odpytywane co 15 minut. Darmowe API jest przeznaczone do użytku niekomercyjnego, a dane wymagają atrybucji CC BY 4.0; panel pokazuje informację o źródle. W **Konfiguracja → Źródła pogody** wybierz preferowane źródło bieżących pomiarów: automatycznie, Open-Meteo, pobliskie ramki APRS WX odbierane przez TNC, BME280, MQTT, Home Assistant albo USB/serial. Preferencja dotyczy bloczków komunikatu ustawionych na źródło automatyczne; gdy brakuje świeżego pomiaru wybranego parametru, używany jest najnowszy dostępny odczyt. Prognoza pozostaje z Open-Meteo. W edytorze bloczka możesz wskazać źródło osobno.
 
+W tym samym panelu można wpisać znaki stacji APRS WX do czarnej listy, oddzielone przecinkami. Dopasowanie obejmuje pełny znak stacji wraz z SSID i nie rozróżnia wielkości liter. Zablokowane ramki nadal są dostępne w monitorze z oznaczeniem blokady, ale ich nowe i zapisane pomiary są pomijane przy wyznaczaniu bieżących danych i lokalnego szacunku. Historia pomiarów nie jest usuwana.
+
+### Ostrzeżenia IMGW
+
+Zakładka **Ostrzeżenia** pokazuje aktywne i nadchodzące ostrzeżenia IMGW dla skonfigurowanych powiatów. W **Konfiguracja → Źródła pogody → Ostrzeżenia IMGW** włącz funkcję i wpisz czterocyfrowe kody TERYT powiatów oddzielone przecinkami. Aplikacja odświeża dane co 10 minut. Dla aktywnych ostrzeżeń komunikat głosowy jest ponawiany według osobnego interwału dla każdego stopnia (domyślnie 60, 30 i 15 minut dla stopnia 1, 2 i 3). Zmiana treści, stopnia lub okresu ostrzeżenia pozwala ogłosić jego zaktualizowaną wersję. Wymagany jest skonfigurowany głos TTS. Treść IMGW jest po polsku; komunikat korzysta z lokalnego TTS. Ta funkcja pobiera dane z API IMGW-PIB, nie nadaje ostrzeżeń przez radio ani APRS-IS.
+
 APRS łączy się z zewnętrznym punktem KISS TCP Dire Wolf, zwykle `127.0.0.1:8001`. Skonfiguruj Dire Wolf, aby odbierał dźwięk z radia i przekazywał ramki KISS do UltimateWX. Domyślny promień kwalifikowania źródła WX to 10 km. Ramki bez obsługiwanej pozycji, z błędnymi polami pogody, poza promieniem lub odebrane ponad dwie godziny temu pozostają w monitorze, ale nie zasilają odczytów pogodowych.
 
 UltimateWX odbiera ramki APRS z zewnętrznego TNC przez TCP KISS, więc wejście audio nie jest tu potrzebne. Wybierz wyjście komunikatu i ustaw jego programową głośność od 0% do 100%. Do odtwarzania wymagane są ALSA (`aplay`) i lokalne polecenie Piper.

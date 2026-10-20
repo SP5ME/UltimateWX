@@ -39,4 +39,4 @@ Markdown jest źródłem dokumentacji. Pliki PDF są budowane na wydaniach po za
 
 ## Licencja i źródła danych
 
-Kod UltimateWX jest publikowany na licencji GPL-3.0-or-later. Darmowe API Open-Meteo jest przeznaczone do użytku niekomercyjnego i wymaga atrybucji; przed wdrożeniem w innym modelu użycia należy skonfigurować dostawcę z odpowiednimi warunkami. Głosy TTS mają osobne licencje i są pokazywane w menedżerze dopiero po rozpoznaniu dozwolonej licencji. Zobacz [wykaz licencji i źródeł](docs/LICENSING.md).
+Kod UltimateWX jest publikowany na licencji GPL-3.0-or-later. Darmowe API Open-Meteo jest przeznaczone do użytku niekomercyjnego i wymaga atrybucji; ostrzeżenia IMGW-PIB wymagają wskazania źródła danych. Przed wdrożeniem należy sprawdzić aktualne warunki obu usług. Głosy TTS mają osobne licencje i są pokazywane w menedżerze dopiero po rozpoznaniu dozwolonej licencji. Zobacz [wykaz licencji i źródeł](docs/LICENSING.md).

@@ -4,6 +4,13 @@ W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na 
 
 ## [Unreleased]
 
+## [0.0.6-prealpha.11] - 2026-10-20
+
+### Added
+- Dodano panel ostrzeżeń IMGW dla skonfigurowanych powiatów TERYT oraz lokalne komunikaty głosowe z powtarzaniem zależnym od stopnia zagrożenia.
+- Dodano obsługę źródła i wymaganą atrybucję danych IMGW-PIB w dokumentacji.
+- Dodano konfigurowalną czarną listę znaków APRS WX. Zablokowane ramki pozostają widoczne w monitorze, ale nie zasilają bieżących odczytów ani lokalnego szacunku.
+
 ## [0.0.6-prealpha.7] - 2026-10-19
 
 ### Added

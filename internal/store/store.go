@@ -6,10 +6,12 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/ultimatewx/ultimatewx/internal/aprs"
+	"github.com/ultimatewx/ultimatewx/internal/warnings"
 	"github.com/ultimatewx/ultimatewx/internal/weather"
 )
 
@@ -18,22 +20,32 @@ type Playback struct {
 	Text   string    `json:"text"`
 	Result string    `json:"result"`
 }
+type WarningAnnouncement struct {
+	Signature string    `json:"signature"`
+	At        time.Time `json:"at"`
+}
 type Store struct {
-	dir          string
-	mu           sync.RWMutex
-	observations []weather.Observation
-	frames       []aprs.Frame
-	playbacks    []Playback
+	dir                  string
+	mu                   sync.RWMutex
+	observations         []weather.Observation
+	frames               []aprs.Frame
+	playbacks            []Playback
+	warnings             []warnings.Alert
+	warningAnnouncements map[string]WarningAnnouncement
 }
 
 func Open(dir string) (*Store, error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
-	s := &Store{dir: dir}
+	s := &Store{dir: dir, warningAnnouncements: map[string]WarningAnnouncement{}}
 	s.observations = load[weather.Observation](filepath.Join(dir, "observations.jsonl"))
 	s.frames = load[aprs.Frame](filepath.Join(dir, "aprs.jsonl"))
 	s.playbacks = load[Playback](filepath.Join(dir, "playbacks.jsonl"))
+	s.warnings = load[warnings.Alert](filepath.Join(dir, "warnings.jsonl"))
+	if b, err := os.ReadFile(filepath.Join(dir, "warning_announcements.json")); err == nil {
+		_ = json.Unmarshal(b, &s.warningAnnouncements)
+	}
 	return s, nil
 }
 func load[T any](path string) []T {
@@ -96,6 +108,50 @@ func (s *Store) AddPlayback(p Playback) error {
 	s.playbacks = append(s.playbacks, p)
 	return nil
 }
+func (s *Store) ReplaceWarnings(items []warnings.Alert) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := rewrite(filepath.Join(s.dir, "warnings.jsonl"), items); err != nil {
+		return err
+	}
+	s.warnings = append([]warnings.Alert(nil), items...)
+	return nil
+}
+func (s *Store) Warnings() []warnings.Alert {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]warnings.Alert(nil), s.warnings...)
+}
+func (s *Store) WarningAnnouncement(id string) (WarningAnnouncement, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	item, ok := s.warningAnnouncements[id]
+	return item, ok
+}
+func (s *Store) SetWarningAnnouncement(id string, item WarningAnnouncement) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	updated := make(map[string]WarningAnnouncement, len(s.warningAnnouncements)+1)
+	for key, value := range s.warningAnnouncements {
+		updated[key] = value
+	}
+	updated[id] = item
+	data, err := json.MarshalIndent(updated, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(s.dir, 0700); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(s.dir, "warning_announcements.json.tmp"), append(data, '\n'), 0600); err != nil {
+		return err
+	}
+	if err := os.Rename(filepath.Join(s.dir, "warning_announcements.json.tmp"), filepath.Join(s.dir, "warning_announcements.json")); err != nil {
+		return err
+	}
+	s.warningAnnouncements = updated
+	return nil
+}
 func (s *Store) Observations(days int) []weather.Observation {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -109,10 +165,16 @@ func (s *Store) Observations(days int) []weather.Observation {
 	return out
 }
 func (s *Store) Latest() []weather.Observation {
+	return s.LatestExcludingStations(nil)
+}
+func (s *Store) LatestExcludingStations(blacklist []string) []weather.Observation {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	last := map[string]weather.Observation{}
 	for _, o := range s.observations {
+		if strings.EqualFold(o.Source, "aprs") && blacklistedStation(o.Station, blacklist) {
+			continue
+		}
 		k := o.Parameter + "|" + o.Source
 		if old, ok := last[k]; !ok || o.ObservedAt.After(old.ObservedAt) {
 			last[k] = o
@@ -124,6 +186,15 @@ func (s *Store) Latest() []weather.Observation {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Parameter < out[j].Parameter })
 	return out
+}
+func blacklistedStation(station string, blacklist []string) bool {
+	station = strings.TrimSpace(station)
+	for _, callsign := range blacklist {
+		if station != "" && strings.EqualFold(station, strings.TrimSpace(callsign)) {
+			return true
+		}
+	}
+	return false
 }
 func (s *Store) Frames(limit int, wxOnly bool) []aprs.Frame {
 	s.mu.RLock()

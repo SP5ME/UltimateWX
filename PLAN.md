@@ -28,6 +28,10 @@ Panel w sieci lokalnej zabezpiecza hasło ustawiane podczas pierwszego uruchomie
 ## Dane pogodowe i normalizacja
 
 - Źródła pierwszej wersji: Open-Meteo dla prognozy online, APRS WX oraz czujniki lokalne/zdalne.
+- Ostrzeżenia pogodowe: pobieranie aktywnych ostrzeżeń IMGW lub ich dystrybucja przez APRS-IS PL-WARN/CAWF. Ostrzeżenie musi zawierać źródło, rodzaj zagrożenia, stopień, obszar oraz czas obowiązywania; aplikacja uwzględnia je tylko wtedy, gdy dotyczą skonfigurowanej lokalizacji stacji.
+- Źródło ostrzeżeń ma być wybierane z listy adapterów, a lokalizacja ma wynikać z zapisanych współrzędnych stacji. Interfejs nie powinien wymagać osobnego wyboru kraju ani ręcznego TERYT; adapter dostawcy odpowiada za dopasowanie obszaru. Przed wdrożeniem kolejnego adaptera trzeba potwierdzić stabilność jego API, geometrii obszarów i warunków ponownego użycia.
+- Kandydat dla wielu krajów europejskich: krajowe kanały MeteoAlarm Atom/CAP; weryfikacja musi potwierdzić, że konkretny kanał publikuje geometrię wystarczającą do dopasowania punktu stacji. Jeśli nie, trzeba użyć oficjalnego źródła krajowego lub innego legalnego mechanizmu lokalizacji obszaru.
+- Ostrzeżenia są osobnym typem danych od pomiarów i prognozy. Panel pokazuje ostrzeżenia aktywne, nadchodzące i zakończone wraz z obszarem, stopniem, źródłem i okresem obowiązywania.
 - Dane z różnych źródeł są normalizowane do wspólnego modelu pojęć meteorologicznych zgodnego z terminologią i jednostkami WMO; użytkownik wybiera parametry, jednostki i sposób prezentacji. Nie oznacza to, że V1 musi eksportować pliki WMO BUFR/GRIB.
 - Jednostki i formaty prezentacji są konfigurowalne; konwersje wykonuje aplikacja.
 - Każdy parametr może mieć wybrane źródło oraz kolejność źródeł zapasowych. Dane powinny zawierać źródło, czas pomiaru/aktualizacji, jakość i informację o świeżości.
@@ -47,6 +51,8 @@ Panel w sieci lokalnej zabezpiecza hasło ustawiane podczas pierwszego uruchomie
 ## Komunikaty, harmonogram i głos
 
 - Komunikat składa się z uporządkowanych, włączanych/wyłączanych bloczków, np. powitanie, data i godzina, aktualna pogoda, prognoza za 4 godziny.
+- Aktywne ostrzeżenia mogą być włączone do komunikatu głosowego i powtarzane częściej niż zwykły komunikat pogodowy. Częstotliwość powtórzeń konfiguruje się osobno i może zależeć od stopnia zagrożenia. Nowe ostrzeżenie lub zmiana jego stopnia może uruchomić dodatkowy komunikat; zakończone i niezmienione ostrzeżenia nie powinny być ogłaszane bez końca.
+- Aplikacja rozpoznaje aktualizacje i duplikaty ostrzeżeń po ich identyfikatorze oraz okresie obowiązywania, aby zmiana komunikatu mogła zostać ogłoszona, a ponowne odebranie tej samej wersji nie tworzyło kolejnego alarmu.
 - W każdym bloku można wybrać podawane parametry, źródło, kolejność/fallback, jednostki i format wypowiedzi.
 - Komunikat jest generowany i odtwarzany lokalnie według harmonogramu; bez funkcji nadawania radiowego w V1.
 - UI od początku przygotowany na pliki tłumaczeń; języki startowe: en, pl, de, fr, es, it. Brakujące tłumaczenie ma mieć czytelny fallback. Społeczność powinna móc dodawać języki przez pliki.
