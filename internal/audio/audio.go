@@ -2,6 +2,7 @@ package audio
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -19,54 +20,75 @@ type Devices struct {
 	Outputs []Device `json:"outputs"`
 }
 
-func List() Devices { return Devices{Inputs: []Device{}, Outputs: list("aplay")} }
+func List() Devices { return Devices{Inputs: list("arecord"), Outputs: list("aplay")} }
+
+// Readiness reports whether the configured speech model and required commands
+// are present. It does not attempt playback, which may still fail for a device.
+func Readiness(engine, model string) (engineReady, modelReady, playerReady bool) {
+	if engine == "" {
+		engine = "piper"
+	}
+	_, engineErr := resolveEngine(engine)
+	_, modelErr := os.Stat(model)
+	_, playerErr := exec.LookPath("aplay")
+	return engineErr == nil, modelErr == nil, playerErr == nil
+}
+
 func list(command string) []Device {
-	out, err := exec.Command(command, "-L").Output()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, command, "-L").Output()
 	if err != nil {
 		return nil
 	}
+	return parseDevices(string(out))
+}
+
+func parseDevices(output string) []Device {
 	var devices []Device
 	seen := map[string]bool{}
 	var fallback []Device
-	var current *Device
-	for _, line := range strings.Split(string(out), "\n") {
+	currentDevice, currentFallback := -1, -1
+	for _, line := range strings.Split(output, "\n") {
 		trim := strings.TrimSpace(line)
 		if trim == "" {
 			continue
 		}
 		if strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
-			if current != nil && current.Description == "" {
-				current.Description = trim
+			if currentDevice >= 0 && devices[currentDevice].Description == "" {
+				devices[currentDevice].Description = trim
+			} else if currentFallback >= 0 && fallback[currentFallback].Description == "" {
+				fallback[currentFallback].Description = trim
 			}
 			continue
 		}
-		if strings.HasPrefix(trim, "plughw:") {
+		if trim == "default" || strings.HasPrefix(trim, "plughw:") || strings.HasPrefix(trim, "sysdefault:") || strings.HasPrefix(trim, "front:") || strings.HasPrefix(trim, "surround") || strings.HasPrefix(trim, "dsnoop:") {
 			if !seen[trim] {
 				devices = append(devices, Device{Name: trim})
-				current = &devices[len(devices)-1]
+				currentDevice, currentFallback = len(devices)-1, -1
 				seen[trim] = true
 			} else {
-				current = nil
+				currentDevice, currentFallback = -1, -1
 			}
 			continue
 		}
 		if trim == "pulse" || trim == "pipewire" || trim == "jack" || trim == "bluealsa" {
 			if !seen[trim] {
 				devices = append(devices, Device{Name: trim})
-				current = &devices[len(devices)-1]
+				currentDevice, currentFallback = len(devices)-1, -1
 				seen[trim] = true
 			} else {
-				current = nil
+				currentDevice, currentFallback = -1, -1
 			}
 			continue
 		}
 		// Keep hardware entries as a fallback for ALSA setups without plughw aliases.
 		if strings.HasPrefix(trim, "hw:") && !seen[trim] {
 			fallback = append(fallback, Device{Name: trim})
-			current = &fallback[len(fallback)-1]
+			currentDevice, currentFallback = -1, len(fallback)-1
 			seen[trim] = true
 		} else {
-			current = nil
+			currentDevice, currentFallback = -1, -1
 		}
 	}
 	if len(devices) == 0 {
@@ -74,19 +96,33 @@ func list(command string) []Device {
 	}
 	return devices
 }
-func PlayWAV(path, device string) error {
+
+// TestInput captures and discards one second of audio from the selected ALSA device.
+func TestInput(ctx context.Context, device string) error {
+	if strings.TrimSpace(device) == "" {
+		device = "default"
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "arecord", "-q", "-D", device, "-t", "raw", "-f", "S16_LE", "-r", "16000", "-c", "1", "-d", "1", "/dev/null")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("arecord: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+func PlayWAV(ctx context.Context, path, device string) error {
 	args := []string{}
 	if device != "" {
 		args = append(args, "-D", device)
 	}
 	args = append(args, path)
-	cmd := exec.Command("aplay", args...)
+	cmd := exec.CommandContext(ctx, "aplay", args...)
 	if b, e := cmd.CombinedOutput(); e != nil {
 		return fmt.Errorf("aplay: %w: %s", e, strings.TrimSpace(string(b)))
 	}
 	return nil
 }
-func Speak(text, model, engine, device string, volume int) error {
+func Speak(ctx context.Context, text, model, engine, device string, volume int) error {
 	if strings.TrimSpace(text) == "" {
 		return fmt.Errorf("empty announcement")
 	}
@@ -105,7 +141,7 @@ func Speak(text, model, engine, device string, volume int) error {
 	if err != nil {
 		return err
 	}
-	p := exec.Command(piper, "--model", model, "--output_file", tmp)
+	p := exec.CommandContext(ctx, piper, "--model", model, "--output_file", tmp)
 	p.Stdin = bytes.NewBufferString(text)
 	if b, e := p.CombinedOutput(); e != nil {
 		return fmt.Errorf("TTS engine: %w: %s", e, strings.TrimSpace(string(b)))
@@ -113,7 +149,7 @@ func Speak(text, model, engine, device string, volume int) error {
 	if err := setWAVVolume(tmp, volume); err != nil {
 		return fmt.Errorf("set announcement volume: %w", err)
 	}
-	return PlayWAV(tmp, device)
+	return PlayWAV(ctx, tmp, device)
 }
 
 func resolveEngine(engine string) (string, error) {

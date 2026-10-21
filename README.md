@@ -14,7 +14,7 @@ Wymagany Go 1.23 lub nowszy.
 go run ./cmd/ultimatewx --listen 127.0.0.1:8080
 ```
 
-Otwórz `http://127.0.0.1:8080`. Przy pierwszym uruchomieniu przejdź konfigurator stacji, a następnie ustaw hasło panelu albo wybierz pracę bez logowania. Dane developerskie trafiają do katalogu `./data`.
+Otwórz `http://127.0.0.1:8080`. Przy pierwszym uruchomieniu odczytaj jednorazowy token poleceniem `cat ./data/setup-token` i wpisz go w panelu, zanim ustawisz hasło albo wybierzesz pracę bez logowania. Potem możesz przejść przez konfigurator stacji. Dane developerskie trafiają do katalogu `./data`.
 
 ## Instalacja wydania
 
@@ -24,7 +24,7 @@ Instalator najnowszego wydania można uruchomić jednym poleceniem:
 curl -fsSL https://raw.githubusercontent.com/SP5ME/UltimateWX/main/scripts/install.sh | sudo sh
 ```
 
-Instalator obsługuje Raspberry Pi OS, Ubuntu i Alpine na ARMv7, ARM64 oraz x86-64, korzystając z systemd lub OpenRC. Piper TTS instaluje automatycznie na Raspberry Pi OS/Debian i Ubuntu dla ARM64 oraz x86-64; na Alpine i ARMv7 pakiet nie ma zgodnego oficjalnego pliku binarnego. Szczegóły: [dokumentacja instalacji](docs/pl/manual.md#instalacja).
+Minimalne wspierane wersje to Raspberry Pi OS/Debian 12, Ubuntu 24.04 LTS i Alpine Linux 3.22. Instalator obsługuje te systemy na ARMv7, ARM64 oraz x86-64, korzystając z systemd lub OpenRC. Instrukcja zawiera też skrypt odinstalowujący, który domyślnie zachowuje dane. Piper TTS instaluje automatycznie na Raspberry Pi OS/Debian i Ubuntu dla ARM64 oraz x86-64; na Alpine i ARMv7 pakiet nie ma zgodnego oficjalnego pliku binarnego. Szczegóły: [dokumentacja instalacji](docs/pl/manual.md#instalacja).
 
 ## Dokumentacja
 
@@ -39,4 +39,4 @@ Markdown jest źródłem dokumentacji. Pliki PDF są budowane na wydaniach po za
 
 ## Licencja i źródła danych
 
-Kod UltimateWX jest publikowany na licencji GPL-3.0-or-later. Darmowe API Open-Meteo jest przeznaczone do użytku niekomercyjnego i wymaga atrybucji; ostrzeżenia IMGW-PIB wymagają wskazania źródła danych. Przed wdrożeniem należy sprawdzić aktualne warunki obu usług. Głosy TTS mają osobne licencje i są pokazywane w menedżerze dopiero po rozpoznaniu dozwolonej licencji. Zobacz [wykaz licencji i źródeł](docs/LICENSING.md).
+Kod UltimateWX jest publikowany na licencji GPL-3.0-or-later. Dane pogodowe Open-Meteo wymagają atrybucji i podlegają ograniczeniom bezpłatnego API. Ostrzeżenia są pobierane z IMGW-PIB w Polsce, DWD w Niemczech, GeoSphere Austria w Austrii oraz wielokrajowego strumienia MeteoAlarm/WIS2; panel i komunikat głosowy podają źródło danych. Warunki oraz wymagane atrybucje różnią się między dostawcami i są opisane w [wykazie licencji i źródeł](docs/LICENSING.md). Głosy TTS mają osobne licencje i są pokazywane w menedżerze dopiero po rozpoznaniu dozwolonej licencji.

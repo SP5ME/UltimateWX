@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+	_ "time/tzdata"
 
 	"github.com/ultimatewx/ultimatewx/internal/app"
 	"github.com/ultimatewx/ultimatewx/internal/updater"

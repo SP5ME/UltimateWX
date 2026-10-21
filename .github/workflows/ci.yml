@@ -25,11 +25,35 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
+      - name: Validate shell scripts and locale example
+        run: |
+          for script in scripts/install.sh scripts/uninstall.sh scripts/smoke-install-container.sh; do
+            sh -n "$script"
+          done
+          python3 -m json.tool examples/locales/nl.json >/dev/null
+          python3 scripts/check-ui-locales.py
+      - name: Validate inline browser JavaScript
+        if: matrix.goarch == 'amd64'
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          html = Path("internal/app/index.html").read_text(encoding="utf-8")
+          start = html.find("<script>")
+          end = html.find("</script>", start)
+          if start < 0 or end < 0 or html.find("<script>", start + 1) >= 0:
+              raise SystemExit("Expected exactly one inline application script")
+          Path("/tmp/ultimatewx-inline.js").write_text(html[start + 8:end], encoding="utf-8")
+          PY
+          node --check /tmp/ultimatewx-inline.js
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
       - run: go test ./...
+      - name: Check for data races
+        if: matrix.goarch == 'amd64'
+        run: go test -race ./...
       - run: go vet ./...
       - name: Build and smoke test native Linux binary
         if: matrix.goarch != 'arm'
@@ -38,14 +62,45 @@ jobs:
         run: |
           CGO_ENABLED=0 GOOS=linux go build -trimpath -o ultimatewx ./cmd/ultimatewx
           ./ultimatewx --help
+      - name: Smoke test installer and uninstaller in containers
+        if: matrix.goarch == 'amd64'
+        run: |
+          fixture="$RUNNER_TEMP/ultimatewx-install-fixture"
+          mkdir -p "$fixture"
+          tar -C . -czf "$fixture/ultimatewx_linux_amd64.tar.gz" ultimatewx
+          (cd "$fixture" && sha256sum ultimatewx_linux_amd64.tar.gz > SHA256SUMS)
+          docker run --rm \
+            -v "$fixture:/fixtures:ro" \
+            -v "$GITHUB_WORKSPACE/scripts:/scripts:ro" \
+            -e FIXTURE_DIR=/fixtures -e ULTIMATEWX_VERSION=v0.0.0 \
+            ubuntu:24.04 sh /scripts/smoke-install-container.sh systemd
+          docker run --rm \
+            -v "$fixture:/fixtures:ro" \
+            -v "$GITHUB_WORKSPACE/scripts:/scripts:ro" \
+            -e FIXTURE_DIR=/fixtures -e ULTIMATEWX_VERSION=v0.0.0 \
+            alpine:3.22 sh /scripts/smoke-install-container.sh openrc
       - name: Cross-build Linux ARMv7 binary
         if: matrix.goarch == 'arm'
         env:
           GOARM: '7'
         run: CGO_ENABLED=0 GOOS=linux GOARCH=arm go build -trimpath -o ultimatewx ./cmd/ultimatewx
+      - name: Enable QEMU for ARMv7 container smoke test
+        if: matrix.goarch == 'arm'
+        uses: docker/setup-qemu-action@v3
       - name: Smoke test on Alpine
-        if: matrix.goarch != 'arm'
-        run: docker run --rm -v "$PWD/ultimatewx:/tmp/ultimatewx:ro" alpine:latest sh -c 'apk add --no-cache ca-certificates >/dev/null && /tmp/ultimatewx --help'
+        env:
+          PLATFORM: ${{ matrix.goarch == 'arm' && 'linux/arm/v7' || format('linux/{0}', matrix.goarch) }}
+        run: |
+          for image in alpine:3.22 alpine:3.24; do
+            docker run --rm --platform "$PLATFORM" -v "$PWD/ultimatewx:/tmp/ultimatewx:ro" "$image" sh -c 'apk add --no-cache ca-certificates >/dev/null && /tmp/ultimatewx --help'
+          done
+      - name: Smoke test on Debian 12 and 13
+        env:
+          PLATFORM: ${{ matrix.goarch == 'arm' && 'linux/arm/v7' || format('linux/{0}', matrix.goarch) }}
+        run: |
+          for image in debian:bookworm-slim debian:trixie-slim; do
+            docker run --rm --platform "$PLATFORM" -v "$PWD/ultimatewx:/tmp/ultimatewx:ro" "$image" sh -c 'apt-get update >/dev/null && apt-get install -y --no-install-recommends ca-certificates >/dev/null && /tmp/ultimatewx --help'
+          done
       - name: Documentation completeness
         run: python3 scripts/check-docs.py
 
@@ -72,8 +127,7 @@ jobs:
         run: |
           git clone --depth 1 --branch v1.2.0 https://github.com/rhasspy/piper.git piper-src
           git clone --depth 1 --branch v1.1.0 https://github.com/rhasspy/piper-phonemize.git piper-phonemize-src
-          ESPEAK_COMMIT="$(git ls-remote https://github.com/rhasspy/espeak-ng.git refs/heads/master | cut -f1)"
-          test -n "$ESPEAK_COMMIT"
+          ESPEAK_COMMIT=0f65aa301e0d6bae5e172cc74197d32a6182200f
           git clone --no-checkout https://github.com/rhasspy/espeak-ng.git espeak-ng-src
           git -C espeak-ng-src fetch --depth 1 origin "$ESPEAK_COMMIT"
           git -C espeak-ng-src checkout --detach FETCH_HEAD
@@ -222,15 +276,33 @@ jobs:
             rm dist/release/ultimatewx
           done
           cp LICENSE docs/LICENSING.md dist/
+          cp scripts/install.sh scripts/uninstall.sh dist/
           mkdir -p dist/LICENSES
           cp LICENSES/Apache-2.0.txt dist/LICENSES/
-          (cd dist && sha256sum ultimatewx_linux_*.tar.gz piper_armv7.tar.gz PIPER-ARMV7-LICENSE.md PIPER-ARMV7-SOURCES.tar.gz > SHA256SUMS)
+          mkdir -p dist/user-docs/docs dist/user-docs/LICENSES dist/user-docs/examples
+          cp README.md LICENSE CHANGELOG.md dist/user-docs/
+          cp docs/LICENSING.md dist/user-docs/docs/
+          cp LICENSES/Apache-2.0.txt dist/user-docs/LICENSES/
+          cp -R examples/. dist/user-docs/examples/
+          for language in en pl de fr es it; do
+            mkdir -p "dist/user-docs/docs/$language"
+            cp "docs/$language/manual.md" "dist/user-docs/docs/$language/"
+          done
+          tar -czf dist/USER-DOCUMENTATION.tar.gz -C dist/user-docs README.md LICENSE CHANGELOG.md docs LICENSES examples
+          tar -tzf dist/USER-DOCUMENTATION.tar.gz | grep -q '^docs/LICENSING.md$'
+          tar -tzf dist/USER-DOCUMENTATION.tar.gz | grep -q '^examples/locales/nl.json$'
+          tar -tzf dist/USER-DOCUMENTATION.tar.gz | grep -q '^examples/arduino-bme280-serial/README.md$'
+          tar -tzf dist/USER-DOCUMENTATION.tar.gz | grep -q '^examples/esp32-bme280-mqtt/README.md$'
+          for language in en pl de fr es it; do
+            tar -tzf dist/USER-DOCUMENTATION.tar.gz | grep -q "^docs/$language/manual.md\$"
+          done
+          (cd dist && sha256sum ultimatewx_linux_*.tar.gz USER-DOCUMENTATION.tar.gz piper_armv7.tar.gz PIPER-ARMV7-LICENSE.md PIPER-ARMV7-SOURCES.tar.gz install.sh uninstall.sh > SHA256SUMS)
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           PDF_REVIEWED: ${{ steps.translations.outputs.reviewed }}
         run: |
-          assets=(dist/ultimatewx_linux_*.tar.gz dist/piper_armv7.tar.gz dist/PIPER-ARMV7-SOURCES.tar.gz dist/SHA256SUMS dist/LICENSE dist/LICENSING.md dist/PIPER-ARMV7-LICENSE.md dist/PIPER-ARMV7-SHA256SUMS dist/LICENSES/Apache-2.0.txt)
+          assets=(dist/ultimatewx_linux_*.tar.gz dist/USER-DOCUMENTATION.tar.gz dist/piper_armv7.tar.gz dist/PIPER-ARMV7-SOURCES.tar.gz dist/SHA256SUMS dist/install.sh dist/uninstall.sh dist/LICENSE dist/LICENSING.md dist/PIPER-ARMV7-LICENSE.md dist/PIPER-ARMV7-SHA256SUMS dist/LICENSES/Apache-2.0.txt)
           if [ "$PDF_REVIEWED" = "true" ]; then
             assets+=(dist/docs/*.pdf)
           fi

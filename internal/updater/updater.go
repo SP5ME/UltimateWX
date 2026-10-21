@@ -2,6 +2,7 @@ package updater
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
@@ -267,6 +268,9 @@ func Apply(ctx context.Context, goos, arch string) error {
 	if e != nil {
 		return e
 	}
+	if comparison, ok := compareVersions(r.TagName, Version); ok && comparison <= 0 {
+		return errors.New("brak nowszego wydania do zainstalowania")
+	}
 	name := archiveName(goos, arch)
 	archiveURL := assetURL(r, name)
 	sumURL := assetURL(r, "SHA256SUMS")
@@ -294,15 +298,19 @@ func Apply(ctx context.Context, goos, arch string) error {
 		return e
 	}
 	expected := ""
+	matches := 0
 	for _, line := range strings.Split(string(sumBytes), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) == 2 && strings.TrimPrefix(fields[1], "*") == name {
+			matches++
 			expected = strings.ToLower(fields[0])
-			break
 		}
 	}
-	if len(expected) != 64 {
-		return errors.New("brak poprawnej sumy SHA-256 w wydaniu")
+	if matches != 1 || len(expected) != sha256.Size*2 {
+		return errors.New("manifest SHA-256 musi zawierać dokładnie jeden poprawny wpis dla pakietu")
+	}
+	if _, err := hex.DecodeString(expected); err != nil {
+		return errors.New("manifest zawiera niepoprawną sumę SHA-256 pakietu")
 	}
 	archive, e := get(archiveURL, maxReleaseBytes)
 	if e != nil {
@@ -339,7 +347,7 @@ func Apply(ctx context.Context, goos, arch string) error {
 	return nil
 }
 func extractBinary(data []byte) ([]byte, error) {
-	gz, e := gzip.NewReader(strings.NewReader(string(data)))
+	gz, e := gzip.NewReader(bytes.NewReader(data))
 	if e != nil {
 		return nil, e
 	}
@@ -360,7 +368,14 @@ func extractBinary(data []byte) ([]byte, error) {
 		if h.Size <= 0 || h.Size > 50<<20 {
 			return nil, errors.New("niepoprawny rozmiar pliku wykonywalnego")
 		}
-		return io.ReadAll(io.LimitReader(tr, h.Size))
+		binary, err := io.ReadAll(io.LimitReader(tr, h.Size))
+		if err != nil {
+			return nil, err
+		}
+		if int64(len(binary)) != h.Size {
+			return nil, errors.New("pakiet zawiera niekompletny plik wykonywalny")
+		}
+		return binary, nil
 	}
 	return nil, errors.New("pakiet nie zawiera pliku ultimatewx")
 }

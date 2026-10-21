@@ -1,34 +1,51 @@
 package mqtt
 
 import (
+	"crypto/tls"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 )
 
 type Message struct {
-	Topic   string
-	Payload []byte
+	Topic    string
+	Payload  []byte
+	QoS      byte
+	PacketID uint16
 }
 
 func Connect(broker, clientID, username, password, topic string) (net.Conn, error) {
+	return ConnectWithQoS(broker, clientID, username, password, topic, 0)
+}
+
+// ConnectWithQoS subscribes to one MQTT topic at the requested QoS level.
+// QoS 0 and 1 are supported by this small MQTT 3.1.1 client.
+func ConnectWithQoS(broker, clientID, username, password, topic string, qos byte) (net.Conn, error) {
+	if qos > 1 {
+		return nil, fmt.Errorf("unsupported MQTT subscription QoS %d", qos)
+	}
 	u, e := url.Parse(broker)
 	if e != nil {
 		return nil, e
 	}
-	if u.Scheme != "tcp" && u.Scheme != "mqtt" {
+	if u.Scheme != "tcp" && u.Scheme != "mqtt" && u.Scheme != "mqtts" {
 		return nil, fmt.Errorf("unsupported MQTT scheme %q", u.Scheme)
 	}
-	addr := u.Host
-	if !strings.Contains(addr, ":") {
-		addr = net.JoinHostPort(addr, "1883")
+	addr, e := BrokerAddress(broker)
+	if e != nil {
+		return nil, e
 	}
-	conn, e := net.DialTimeout("tcp", addr, 8*time.Second)
+	dialer := &net.Dialer{Timeout: 8 * time.Second}
+	var conn net.Conn
+	if u.Scheme == "mqtts" {
+		conn, e = tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{ServerName: u.Hostname(), MinVersion: tls.VersionTLS12})
+	} else {
+		conn, e = dialer.Dial("tcp", addr)
+	}
 	if e != nil {
 		return nil, e
 	}
@@ -66,25 +83,40 @@ func Connect(broker, clientID, username, password, topic string) (net.Conn, erro
 	var sub []byte
 	sub = append(sub, 0, 1)
 	sub = appendString(sub, topic)
-	sub = append(sub, 0)
+	sub = append(sub, qos)
 	if e = writePacket(conn, 0x82, sub); e != nil {
 		conn.Close()
 		return nil, e
 	}
 	conn.SetReadDeadline(time.Now().Add(8 * time.Second))
 	h, ack, e = readPacket(conn)
-	if e != nil || h>>4 != 9 {
+	if e != nil || h>>4 != 9 || len(ack) < 3 || binary.BigEndian.Uint16(ack[:2]) != 1 || ack[2] > 2 {
 		conn.Close()
 		if e != nil {
 			return nil, e
 		}
-		return nil, fmt.Errorf("MQTT subscribe failed")
+		return nil, fmt.Errorf("MQTT subscribe failed or broker rejected the topic")
 	}
 	conn.SetReadDeadline(time.Time{})
 	return conn, nil
 }
 
 func Read(conn net.Conn) (Message, error) {
+	message, err := ReadUnacked(conn)
+	if err != nil {
+		return Message{}, err
+	}
+	if message.QoS == 1 {
+		if err := Acknowledge(conn, message); err != nil {
+			return Message{}, err
+		}
+	}
+	return message, nil
+}
+
+// ReadUnacked reads a PUBLISH without acknowledging a QoS 1 message. Call
+// Acknowledge after the application has accepted the payload.
+func ReadUnacked(conn net.Conn) (Message, error) {
 	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 	h, p, e := readPacket(conn)
 	if e != nil {
@@ -97,7 +129,35 @@ func Read(conn net.Conn) (Message, error) {
 	if n+2 > len(p) {
 		return Message{}, fmt.Errorf("invalid MQTT topic")
 	}
-	return Message{Topic: string(p[2 : 2+n]), Payload: append([]byte(nil), p[2+n:]...)}, nil
+	offset := 2 + n
+	qos := (h >> 1) & 0x03
+	if qos == 3 {
+		return Message{}, fmt.Errorf("invalid MQTT publish QoS")
+	}
+	if qos > 0 {
+		if offset+2 > len(p) {
+			return Message{}, fmt.Errorf("invalid MQTT publish packet identifier")
+		}
+		packetID := binary.BigEndian.Uint16(p[offset : offset+2])
+		offset += 2
+		if qos == 2 {
+			return Message{}, fmt.Errorf("MQTT QoS 2 publish is not supported")
+		}
+		return Message{Topic: string(p[2 : 2+n]), Payload: append([]byte(nil), p[offset:]...), QoS: qos, PacketID: packetID}, nil
+	}
+	return Message{Topic: string(p[2 : 2+n]), Payload: append([]byte(nil), p[offset:]...), QoS: qos}, nil
+}
+
+func Acknowledge(conn net.Conn, message Message) error {
+	if message.QoS != 1 || message.PacketID == 0 {
+		return nil
+	}
+	var packetID [2]byte
+	binary.BigEndian.PutUint16(packetID[:], message.PacketID)
+	if err := writePacket(conn, 0x40, packetID[:]); err != nil {
+		return fmt.Errorf("acknowledge MQTT publish: %w", err)
+	}
+	return nil
 }
 func Ping(conn net.Conn) error { return writePacket(conn, 0xC0, nil) }
 func writePacket(w io.Writer, header byte, payload []byte) error {
@@ -116,8 +176,17 @@ func writePacket(w io.Writer, header byte, payload []byte) error {
 		}
 	}
 	fixed = append(fixed, payload...)
-	_, e := w.Write(fixed)
-	return e
+	for len(fixed) > 0 {
+		written, err := w.Write(fixed)
+		if err != nil {
+			return err
+		}
+		if written == 0 {
+			return io.ErrShortWrite
+		}
+		fixed = fixed[written:]
+	}
+	return nil
 }
 func readPacket(r io.Reader) (byte, []byte, error) {
 	h := []byte{0}
@@ -160,9 +229,15 @@ func BrokerAddress(broker string) (string, error) {
 	if u.Hostname() == "" {
 		return "", fmt.Errorf("MQTT broker host missing")
 	}
+	if u.Scheme != "tcp" && u.Scheme != "mqtt" && u.Scheme != "mqtts" {
+		return "", fmt.Errorf("unsupported MQTT scheme %q", u.Scheme)
+	}
 	port := u.Port()
 	if port == "" {
 		port = "1883"
+		if u.Scheme == "mqtts" {
+			port = "8883"
+		}
 	}
 	if _, e = strconv.Atoi(port); e != nil {
 		return "", e

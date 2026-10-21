@@ -1,0 +1,11 @@
+{
+  "label": "Nederlands",
+  "translations": {
+    "status": "Status",
+    "config": "Configuratie",
+    "stats": "Statistieken",
+    "warnings": "Waarschuwingen",
+    "aprs": "APRS-monitor",
+    "refresh": "Vernieuwen"
+  }
+}

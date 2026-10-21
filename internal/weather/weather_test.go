@@ -79,6 +79,48 @@ func TestOpenMeteoOmitsMissingForecastValues(t *testing.T) {
 	}
 }
 
+func TestOpenMeteoRejectsOversizedResponse(t *testing.T) {
+	body := `{"current":{}}` + strings.Repeat(" ", maxOpenMeteoResponseBytes)
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
+	})}
+	_, err := (OpenMeteo{Client: client, Endpoint: "https://weather.invalid/forecast"}).Fetch(context.Background(), 52, 21, "metric")
+	if err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("Fetch() error = %v, want oversized-response error", err)
+	}
+}
+
+func TestOpenMeteoOmitsNullFieldsIndependently(t *testing.T) {
+	payload := `{"current":{"time":"2026-10-18T10:00","temperature_2m":null,"relative_humidity_2m":60,"apparent_temperature":null,"precipitation":null,"weather_code":null,"wind_speed_10m":null,"wind_direction_10m":null,"surface_pressure":null},"hourly":{"time":["2026-10-18T10:00","2026-10-18T14:00"],"temperature_2m":[null,null],"precipitation_probability":[0,20]}}`
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(payload)), Request: r}, nil
+	})}
+	got, err := (OpenMeteo{Client: client, Endpoint: "https://weather.invalid/forecast"}).Fetch(context.Background(), 52, 21, "metric")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Current) != 1 || got.Current[0].Parameter != "humidity" || got.Current[0].Value != 60 {
+		t.Fatalf("null current values should be omitted: %+v", got.Current)
+	}
+	if len(got.Forecast) != 1 || got.Forecast[0].Parameter != "precipitation_probability" || got.Forecast[0].Value != 20 {
+		t.Fatalf("available hourly fields should survive a null temperature: %+v", got.Forecast)
+	}
+}
+
+func TestOpenMeteoDoesNotLabelDistantHourAsFourHourForecast(t *testing.T) {
+	payload := `{"current":{"time":"2026-10-18T10:00","temperature_2m":11},"hourly":{"time":["2026-10-18T10:00","2026-10-18T20:00"],"temperature_2m":[11,18]}}`
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(payload)), Request: r}, nil
+	})}
+	got, err := (OpenMeteo{Client: client, Endpoint: "https://weather.invalid/forecast"}).Fetch(context.Background(), 52, 21, "metric")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Forecast) != 0 {
+		t.Fatalf("distant hourly data should not be presented as a four-hour forecast: %+v", got.Forecast)
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }

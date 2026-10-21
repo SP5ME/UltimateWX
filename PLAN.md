@@ -7,9 +7,10 @@ UltimateWX to lekka, konfigurowalna pogodynka krótkofalarska dla małych komput
 ## Założenia platformowe
 
 - Obsługiwane środowiska: Raspberry Pi OS/Raspbian, Ubuntu i Alpine Linux.
+- Minimalne wspierane wersje instalatora: Raspberry Pi OS/Debian 12, Ubuntu 24.04 LTS i Alpine Linux 3.22; CI sprawdza także Debian 13 i Alpine 3.24.
 - Wspierane architektury Linux: ARMv7, ARM64 i x86-64.
 - Usługa ma korzystać z systemu init dostępnego na danej dystrybucji, w tym systemd lub OpenRC.
-- Kierunek technologiczny backendu: lekki, modułowy język kompilowany do łatwego wdrożenia na Linuksie (Go jest kandydatem do potwierdzenia na etapie projektu technicznego). Panel WWW powinien być prosty i działać lokalnie.
+- Backend wybrany i zaimplementowany w Go. Panel HTML/CSS/JavaScript jest osadzony w binarium Go i udostępniany lokalnie przez ten sam proces.
 
 ## Panel i konfiguracja
 
@@ -29,13 +30,15 @@ Panel w sieci lokalnej zabezpiecza hasło ustawiane podczas pierwszego uruchomie
 
 - Źródła pierwszej wersji: Open-Meteo dla prognozy online, APRS WX oraz czujniki lokalne/zdalne.
 - Ostrzeżenia pogodowe: pobieranie aktywnych ostrzeżeń IMGW lub ich dystrybucja przez APRS-IS PL-WARN/CAWF. Ostrzeżenie musi zawierać źródło, rodzaj zagrożenia, stopień, obszar oraz czas obowiązywania; aplikacja uwzględnia je tylko wtedy, gdy dotyczą skonfigurowanej lokalizacji stacji.
-- Źródło ostrzeżeń ma być wybierane z listy adapterów, a lokalizacja ma wynikać z zapisanych współrzędnych stacji. Interfejs nie powinien wymagać osobnego wyboru kraju ani ręcznego TERYT; adapter dostawcy odpowiada za dopasowanie obszaru. Przed wdrożeniem kolejnego adaptera trzeba potwierdzić stabilność jego API, geometrii obszarów i warunków ponownego użycia.
-- Kandydat dla wielu krajów europejskich: krajowe kanały MeteoAlarm Atom/CAP; weryfikacja musi potwierdzić, że konkretny kanał publikuje geometrię wystarczającą do dopasowania punktu stacji. Jeśli nie, trzeba użyć oficjalnego źródła krajowego lub innego legalnego mechanizmu lokalizacji obszaru.
+- Aplikacja automatycznie odpytuje adaptery, których zasięg obejmuje zapisane współrzędne stacji; interfejs pokazuje ich status, ale nie wymaga wyboru kraju ani dostawcy. Dopasowanie obszaru wykonuje adapter na podstawie oficjalnych danych dostawcy. Przed wdrożeniem kolejnego adaptera trzeba potwierdzić stabilność jego API, dokładność dopasowania lokalizacji i warunki ponownego użycia danych.
+- Wdrożono wielokrajowy strumień [MeteoAlarm/WIS2](https://api.meteoalarm.org/mqtt) przez publiczny broker [WMO](https://community.wmo.int/site/knowledge-hub/programmes-and-initiatives/wmo-information-system-wis/wis-20-global-services). Wymaga jawnych praw i atrybucji z powiadomienia, pobiera GeoJSON i CAP wyłącznie przez HTTPS, sprawdza adresy sieciowe, a alert dopasowuje do stacji wyłącznie wtedy, gdy zawiera ją poligon obszaru CAP. Geometria GeoJSON służy tylko do wczesnego odrzucenia alertu; alerty bez poligonu CAP są pomijane. Ostrzeżenia z inną licencją CAP są pomijane. MQTT jest strumieniem bieżącym, bez odtwarzania wiadomości pominiętych podczas przestoju; poprzednie aktywne alerty pozostają zapisane do wygaśnięcia. Broker i temat są zdefiniowane jako domyślne, a lista brokerów zapasowych może być zmieniana w adapterze.
 - Ostrzeżenia są osobnym typem danych od pomiarów i prognozy. Panel pokazuje ostrzeżenia aktywne, nadchodzące i zakończone wraz z obszarem, stopniem, źródłem i okresem obowiązywania.
 - Dane z różnych źródeł są normalizowane do wspólnego modelu pojęć meteorologicznych zgodnego z terminologią i jednostkami WMO; użytkownik wybiera parametry, jednostki i sposób prezentacji. Nie oznacza to, że V1 musi eksportować pliki WMO BUFR/GRIB.
 - Jednostki i formaty prezentacji są konfigurowalne; konwersje wykonuje aplikacja.
-- Każdy parametr może mieć wybrane źródło oraz kolejność źródeł zapasowych. Dane powinny zawierać źródło, czas pomiaru/aktualizacji, jakość i informację o świeżości.
+- Każdy parametr, w tym kierunek wiatru, może mieć wybrane źródło oraz kolejność źródeł zapasowych. Dane powinny zawierać źródło, czas pomiaru/aktualizacji, jakość i informację o świeżości.
 - APRS WX: monitor pokazuje ramki odebrane; do pogody kwalifikują się tylko poprawne, aktualne ramki WX z pozycją, mieszczące się domyślnie w promieniu 10 km. Promień jest konfigurowalny. Ramki poza zasięgiem lub bez pozycji nie zasilają pogody. Nie ma nadawania APRS w pierwszym wydaniu.
+  Parser WX sprawdza zakresy temperatury, wilgotności, ciśnienia i wiatru oraz dekoduje kierunek i prędkość z pola pozycji; pole śniegu `s` nie jest traktowane jako prędkość wiatru.
+- Czarna lista APRS jest dostępna bezpośrednio w monitorze na dwóch poziomach: znak nadawcy blokuje całą stację, a identyfikator SHA-256 blokuje pojedynczą treść ramki WX. Ramki pozostają widoczne; pomiary objęte blokadą nie są używane w bieżącej pogodzie.
 - Odbiór APRS przez Dire Wolf lub KISS TNC; konfiguracja portu/urządzenia i osobnego wejścia audio.
 - Ciśnienie BME280: przechowywać rozróżnienie między ciśnieniem stacyjnym a zredukowanym do poziomu morza, z uwzględnieniem wysokości i bez ponownej korekty danych już zredukowanych. Wysokość instalacji wpływa na interpretację ciśnienia.
 - Gdy Internet jest niedostępny, lokalna prognoza może być jedynie szacunkiem na podstawie historii i lokalnych pomiarów. Komunikat musi wyraźnie oznaczać ją jako lokalny szacunek/prognozę, podawać jej podstawę i pomijać ją, jeśli dane są stare lub niewystarczające.
@@ -46,7 +49,7 @@ Panel w sieci lokalnej zabezpiecza hasło ustawiane podczas pierwszego uruchomie
 - USB/serial: wspólny, udokumentowany format jednej linii JSON na próbkę.
 - Raspberry Pi: bezpośredni BME280 przez I²C/GPIO jako gotowy profil.
 - Materiały dla użytkowników: ogólna instrukcja połączeń i konfiguracji dla wielu płytek, przykładowy firmware ESP32 + BME280 przez Wi-Fi/MQTT oraz Arduino + BME280 przez USB/serial. Opis ma ułatwić uruchomienie bez samodzielnego projektowania protokołu.
-- Dla każdego urządzenia możliwość przypisania nazwy, lokalizacji/wysokości (z dziedziczeniem albo korektą), parametrów i źródeł.
+- Dla każdego urządzenia można przypisać nazwę i wysokość (z dziedziczeniem albo korektą), wybrać używane parametry oraz oznaczyć preferowane urządzenie osobno dla każdego parametru komunikatu. Źródło integracji jest przypisywane automatycznie; globalne priorytety źródeł i fallbacki nadal rozstrzygają kolejność między integracjami.
 
 ## Komunikaty, harmonogram i głos
 
@@ -89,10 +92,18 @@ Panel w sieci lokalnej zabezpiecza hasło ustawiane podczas pierwszego uruchomie
 6. Dodać harmonogram, statystyki, szacowanie offline z jawnym oznaczeniem niepewności, tłumaczenia i pobieranie głosów.
 7. Uzupełnić macierz CI, instalator dla dystrybucji, wydania, dokumentację użytkownika i kontrolę licencji.
 
-## Otwarte decyzje przed implementacją
+## Decyzje techniczne i pozostałe punkty przed wydaniem
 
-- Ostateczny wybór języka/backendu i technologii panelu (Go jest kandydatem, nie zatwierdzonym wyborem).
-- Konkretne wersje dystrybucji i architektury objęte oficjalnym wsparciem.
-- Dokładny system TTS i katalog głosów z licencjami zatwierdzonymi dla każdej pozycji.
-- Zakres i metoda lokalnego szacowania prognozy oraz minimalna ilość/świeżość danych.
-- Retencja statystyk i konfiguracja kopii zapasowej.
+### Rozstrzygnięte w implementacji
+
+- Backend to Go, a panel jest osadzony w binarium; nie wymaga osobnego serwera frontendowego ani kroku budowania zasobów WWW.
+- Silnikiem TTS jest Piper. Katalog głosów jest pobierany dynamicznie, a aplikacja weryfikuje rozpoznaną licencję, sumy pobranych plików i pokazuje odnośnik do karty modelu. Każdy głos nadal wymaga sprawdzenia warunków jego własnej karty przed publikacją/rekomendacją.
+- Lokalny szacunek nie jest prognozą meteorologiczną. Używa wyłącznie zmierzonych ciśnień stacyjnych z tego samego źródła i identyfikatora urządzenia/stacji; wymaga co najmniej dwóch próbek oddzielonych o godzinę, każda młodsza niż 5 godzin. Wynik opisuje zmianę ciśnienia przeliczoną na 3 godziny i jest pomijany przy niewystarczających danych.
+- Retencja historii jest konfigurowalna od 1 do 365 dni (domyślnie 7); monitor APRS przechowuje najwyżej 10 000 ramek. Archiwum zakończonych ostrzeżeń przechowuje do 500 wpisów przez 30 dni.
+- Kopia konfiguracji ma format JSON w wersji 1. Nie zawiera hasła panelu ani historii; zawiera konfigurację integracji, w tym sekrety MQTT i Home Assistant. Import zachowuje aktualne dane logowania panelu i nie nadpisuje tych sekretów pustymi polami.
+
+### Do rozstrzygnięcia lub potwierdzenia przed wydaniem
+
+- Minimalne wersje są określone i sprawdzane przez instalator: Raspberry Pi OS/Debian 12, Ubuntu 24.04 LTS i Alpine 3.22. CI uruchamia smoke testy na Ubuntu 24.04, Alpine 3.22 i 3.24 oraz Debian 12 i 13. Testy kontenerowe nie zastępują instalacji na fizycznym Raspberry Pi OS.
+- Testy rzeczywistego GPIO/I²C, wejścia i wyjścia audio oraz odbioru radiowego wymagają Raspberry Pi i podłączonego sprzętu. Nie są potwierdzone przez kompilację ani kontenery CI; przebieg i wynik należy zapisać według checklisty [odbioru sprzętowego](docs/HARDWARE-VALIDATION.md).
+- Wydanie PDF-ów wymaga jawnego zatwierdzenia ludzkiego tłumaczeń. Skrypt wydania pomija PDF-y, gdy tłumaczenia nie mają takiego zatwierdzenia.

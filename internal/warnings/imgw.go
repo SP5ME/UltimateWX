@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -17,19 +16,23 @@ const DefaultIMGWEndpoint = "https://danepubliczne.imgw.pl/api/data/warningsmete
 // Alert is a normalized IMGW meteorological warning. AreaCodes are TERYT
 // county identifiers supplied by IMGW.
 type Alert struct {
-	ID          string    `json:"id"`
-	Event       string    `json:"event"`
-	Severity    int       `json:"severity"`
-	Probability int       `json:"probability,omitempty"`
-	ValidFrom   time.Time `json:"valid_from"`
-	ValidTo     time.Time `json:"valid_to"`
-	IssuedAt    time.Time `json:"issued_at"`
-	Description string    `json:"description"`
-	Comment     string    `json:"comment,omitempty"`
-	Office      string    `json:"office,omitempty"`
-	AreaCodes   []string  `json:"area_codes"`
-	Source      string    `json:"source"`
-	FetchedAt   time.Time `json:"fetched_at"`
+	ID              string    `json:"id"`
+	Event           string    `json:"event"`
+	ContentLanguage string    `json:"content_language,omitempty"`
+	Severity        int       `json:"severity"`
+	SeverityLabel   string    `json:"severity_label,omitempty"`
+	Probability     *int      `json:"probability,omitempty"`
+	ValidFrom       time.Time `json:"valid_from"`
+	ValidTo         time.Time `json:"valid_to"`
+	IssuedAt        time.Time `json:"issued_at"`
+	Description     string    `json:"description"`
+	Comment         string    `json:"comment,omitempty"`
+	Office          string    `json:"office,omitempty"`
+	Area            string    `json:"area,omitempty"`
+	Attribution     string    `json:"attribution,omitempty"`
+	AreaCodes       []string  `json:"area_codes"`
+	Source          string    `json:"source"`
+	FetchedAt       time.Time `json:"fetched_at"`
 }
 
 type IMGW struct {
@@ -73,7 +76,11 @@ func (p IMGW) Fetch(ctx context.Context) ([]Alert, error) {
 		Office      string   `json:"biuro"`
 		AreaCodes   []string `json:"teryt"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&raw); err != nil {
+	body, err := readLimitedBody(resp.Body, 4<<20)
+	if err != nil {
+		return nil, fmt.Errorf("read IMGW warnings: %w", err)
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, fmt.Errorf("decode IMGW warnings: %w", err)
 	}
 	location, err := time.LoadLocation("Europe/Warsaw")
@@ -96,7 +103,11 @@ func (p IMGW) Fetch(ctx context.Context) ([]Alert, error) {
 			continue
 		}
 		issued, _ := parseLocalTime(item.IssuedAt, location)
-		probability, _ := strconv.Atoi(strings.TrimSpace(item.Probability))
+		probabilityValue, hasProbability := parseProbability(item.Probability)
+		var probability *int
+		if hasProbability {
+			probability = &probabilityValue
+		}
 		codes := make([]string, 0, len(item.AreaCodes))
 		for _, code := range item.AreaCodes {
 			code = strings.TrimSpace(code)
@@ -106,7 +117,8 @@ func (p IMGW) Fetch(ctx context.Context) ([]Alert, error) {
 		}
 		alerts = append(alerts, Alert{
 			ID: strings.TrimSpace(item.ID), Event: strings.TrimSpace(item.Event), Severity: severity,
-			Probability: probability, ValidFrom: from.UTC(), ValidTo: to.UTC(), IssuedAt: issued.UTC(),
+			ContentLanguage: "pl",
+			Probability:     probability, ValidFrom: from.UTC(), ValidTo: to.UTC(), IssuedAt: issued.UTC(),
 			Description: strings.TrimSpace(item.Description), Comment: strings.TrimSpace(item.Comment),
 			Office: strings.TrimSpace(item.Office), AreaCodes: codes, Source: "IMGW-PIB", FetchedAt: now,
 		})

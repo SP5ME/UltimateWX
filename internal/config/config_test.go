@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -13,6 +14,14 @@ func TestDefaultsAndValidation(t *testing.T) {
 	if err := Validate(c); err != nil {
 		t.Fatal(err)
 	}
+	if c.Timezone != "Europe/Warsaw" {
+		t.Fatalf("default station time zone = %q", c.Timezone)
+	}
+	c.Timezone = "Mars/Olympus"
+	if err := Validate(c); err == nil {
+		t.Fatal("expected invalid station time zone to be rejected")
+	}
+	c = Defaults()
 	c.Latitude = 91
 	if err := Validate(c); err == nil {
 		t.Fatal("expected invalid latitude to be rejected")
@@ -42,11 +51,102 @@ func TestPasswordHashAndConfigRoundTrip(t *testing.T) {
 	if err = Save(path, c); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
+		t.Fatalf("configuration temporary file was not removed: %v", err)
+	}
 	loaded, err := Load(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if loaded.PasswordHash != hash || loaded.APRSRadiusKM != 10 || loaded.StationCallsign != c.StationCallsign || loaded.StationLocator != c.StationLocator {
 		t.Fatalf("config did not round-trip: %+v", loaded)
+	}
+}
+
+func TestLoadLegacyConfigAddsDefaultStationTimezone(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy.json")
+	if err := os.WriteFile(path, []byte(`{"units":"metric","history_days":7}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Timezone != DefaultTimezone {
+		t.Fatalf("legacy configuration time zone = %q, want %q", loaded.Timezone, DefaultTimezone)
+	}
+}
+
+func TestWeatherSourceOrderValidation(t *testing.T) {
+	tests := []struct {
+		name  string
+		order map[string][]string
+		valid bool
+	}{
+		{
+			name:  "all supported sources including wind direction",
+			order: map[string][]string{"wind_direction": {"aprs", "mqtt", "home-assistant", "serial", "bme280", "open-meteo"}},
+			valid: true,
+		},
+		{name: "unsupported parameter", order: map[string][]string{"dew_point": {"open-meteo"}}},
+		{name: "unsupported source", order: map[string][]string{"temperature": {"unknown"}}},
+		{name: "duplicate source", order: map[string][]string{"temperature": {"mqtt", "mqtt"}}},
+		{name: "more sources than integrations", order: map[string][]string{"temperature": {"open-meteo", "aprs", "bme280", "mqtt", "home-assistant", "serial", "open-meteo"}}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			c := Defaults()
+			c.WeatherSourceOrder = test.order
+			err := Validate(c)
+			if test.valid && err != nil {
+				t.Fatalf("valid source order rejected: %v", err)
+			}
+			if !test.valid && err == nil {
+				t.Fatal("invalid source order accepted")
+			}
+		})
+	}
+}
+
+func TestSensorDevicePreferenceValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		devices map[string]SensorDeviceConfig
+		valid   bool
+	}{
+		{
+			name: "one preferred device per source and parameter",
+			devices: map[string]SensorDeviceConfig{
+				"mqtt:roof":     {PreferredParameters: []string{"temperature"}},
+				"serial:indoor": {PreferredParameters: []string{"humidity"}},
+			},
+			valid: true,
+		},
+		{
+			name: "conflicting preferred devices",
+			devices: map[string]SensorDeviceConfig{
+				"mqtt:roof":   {PreferredParameters: []string{"temperature"}},
+				"mqtt:indoor": {PreferredParameters: []string{"temperature"}},
+			},
+		},
+		{
+			name: "preferred parameter is excluded",
+			devices: map[string]SensorDeviceConfig{
+				"mqtt:roof": {ExcludedParameters: []string{"temperature"}, PreferredParameters: []string{"temperature"}},
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			c := Defaults()
+			c.SensorDevices = test.devices
+			err := Validate(c)
+			if test.valid && err != nil {
+				t.Fatalf("valid device preferences rejected: %v", err)
+			}
+			if !test.valid && err == nil {
+				t.Fatal("invalid device preferences accepted")
+			}
+		})
 	}
 }
