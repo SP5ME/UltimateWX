@@ -1,7 +1,7 @@
 # Sprawozdanie z wprowadzonych zmian w UltimateWX
 
 **Data:** 2026-10-21
-**Zakres:** zmiany przygotowane do pre-release `v0.0.6-prealpha.12`; publikacja i wynik CI są w toku.
+**Zakres:** zmiany przygotowane do pre-release `v0.0.6-prealpha.13`; publikacja i wynik CI są w toku.
 
 ## Podsumowanie
 

@@ -4,9 +4,10 @@ W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na 
 
 ## [Unreleased]
 
-## [0.0.6-prealpha.12] - 2026-10-21
+## [0.0.6-prealpha.13] - 2026-10-21
 
 ### Fixed
+- Instalator na Alpine jawnie tworzy grupę systemową `ultimatewx`, wymaganą do ustawienia właściciela plików aplikacji.
 - Archiwum zakończonych ostrzeżeń ukrywa wpisy starsze niż 30 dni także wtedy, gdy źródła ostrzeżeń są niedostępne.
 
 ### Improved

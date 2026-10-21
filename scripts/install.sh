@@ -80,10 +80,13 @@ tar -xzf "$TMP/$ASSET" -C "$TMP" ultimatewx
 
 if ! id ultimatewx >/dev/null 2>&1; then
   if [ "$DISTRO" = alpine ]; then
-    adduser -S -D -H -h /var/lib/ultimatewx -s /sbin/nologin ultimatewx
+    if ! grep -q '^ultimatewx:' /etc/group; then addgroup -S ultimatewx; fi
+    adduser -S -D -H -G ultimatewx -h /var/lib/ultimatewx -s /sbin/nologin ultimatewx
   else
     useradd --system --home-dir /var/lib/ultimatewx --no-create-home --shell /usr/sbin/nologin ultimatewx
   fi
+elif [ "$DISTRO" = alpine ] && ! grep -q '^ultimatewx:' /etc/group; then
+  addgroup -S ultimatewx
 fi
 install -d -o ultimatewx -g ultimatewx -m 0750 /opt/ultimatewx /var/lib/ultimatewx
 install -o ultimatewx -g ultimatewx -m 0750 "$TMP/ultimatewx" /opt/ultimatewx/ultimatewx
