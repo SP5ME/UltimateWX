@@ -150,6 +150,17 @@ jobs:
 
           '''
           text = text[:apt_start] + apt_sources + apt_retry + text[apt_end:]
+          onnx_start = text.index('RUN curl -L "${ONNXRUNTIME_URL}"')
+          onnx_end = text.index("\n\n", onnx_start)
+          onnx_retry = '''RUN for attempt in 1 2 3 4 5; do \\
+              curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 "${ONNXRUNTIME_URL}" -o /tmp/onnxruntime.tgz && \\
+              tar -C "lib/Linux-$(uname -m)" -xzf /tmp/onnxruntime.tgz && \\
+              mv "lib/Linux-$(uname -m)"/onnxruntime-* "lib/Linux-$(uname -m)/onnxruntime" && break; \\
+              if [ "$attempt" -eq 5 ]; then exit 1; fi; sleep 5; \\
+          done
+
+          '''
+          text = text[:onnx_start] + onnx_retry + text[onnx_end:]
           start = text.index('RUN curl -L "https://github.com/rhasspy/espeak-ng/archive/refs/heads/master.tar.gz"')
           end = text.index('# Build libpiper_phonemize.so', start)
           replacement = '''COPY espeak-ng/ ./espeak-ng/
