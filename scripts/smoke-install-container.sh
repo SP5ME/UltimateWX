@@ -81,6 +81,7 @@ export PATH
 if [ "$INIT" = systemd ]; then
   mkdir -p /run/systemd/system
 else
+  mkdir -p /etc/init.d
   if [ ! -x /sbin/openrc-run ]; then
     printf '#!/bin/sh\n' >/sbin/openrc-run
     chmod 0755 /sbin/openrc-run
