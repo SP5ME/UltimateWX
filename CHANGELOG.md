@@ -4,6 +4,11 @@ W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na 
 
 ## [Unreleased]
 
+## [0.0.6-prealpha.16] - 2026-10-23
+
+### Fixed
+- Zapis ustawień czujników obsługuje brakujące pola w wierszu formularza i zachowuje poprzednie wartości, zamiast przerywać zapisywanie konfiguracji.
+
 ## [0.0.6-prealpha.15] - 2026-10-21
 
 ### Fixed
