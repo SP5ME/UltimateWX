@@ -26,6 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Validate shell scripts and locale example
+        if: matrix.goarch == 'amd64'
         run: |
           for script in scripts/install.sh scripts/uninstall.sh scripts/smoke-install-container.sh; do
             sh -n "$script"
@@ -50,11 +51,15 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - run: go test ./...
+      - name: Run Go tests on supported native runners
+        if: matrix.goarch != 'arm'
+        run: go test ./...
       - name: Check for data races
         if: matrix.goarch == 'amd64'
         run: go test -race ./...
-      - run: go vet ./...
+      - name: Run Go vet
+        if: matrix.goarch == 'amd64'
+        run: go vet ./...
       - name: Build and smoke test native Linux binary
         if: matrix.goarch != 'arm'
         env:
@@ -102,6 +107,7 @@ jobs:
             docker run --rm --platform "$PLATFORM" -v "$PWD/ultimatewx:/tmp/ultimatewx:ro" "$image" sh -c 'apt-get update >/dev/null && apt-get install -y --no-install-recommends ca-certificates >/dev/null && /tmp/ultimatewx --help'
           done
       - name: Documentation completeness
+        if: matrix.goarch == 'amd64'
         run: python3 scripts/check-docs.py
 
   release:

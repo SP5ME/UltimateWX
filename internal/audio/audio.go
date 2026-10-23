@@ -3,7 +3,9 @@ package audio
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -122,6 +124,69 @@ func PlayWAV(ctx context.Context, path, device string) error {
 	}
 	return nil
 }
+
+// TestOutput plays a short tone without depending on the TTS engine or a voice model.
+func TestOutput(ctx context.Context, device string, volume int) error {
+	if volume < 0 || volume > 100 {
+		return fmt.Errorf("audio volume must be 0..100 percent")
+	}
+	f, err := os.CreateTemp("", "ultimatewx-audio-test-*.wav")
+	if err != nil {
+		return fmt.Errorf("create audio test WAV: %w", err)
+	}
+	path := f.Name()
+	defer os.Remove(path)
+
+	const sampleRate = 16000
+	const duration = 600 * time.Millisecond
+	samples := int(float64(sampleRate) * duration.Seconds())
+	dataSize := samples * 2
+	header := make([]byte, 44)
+	copy(header[0:4], "RIFF")
+	binary.LittleEndian.PutUint32(header[4:8], uint32(36+dataSize))
+	copy(header[8:12], "WAVEfmt ")
+	binary.LittleEndian.PutUint32(header[16:20], 16)
+	binary.LittleEndian.PutUint16(header[20:22], 1)
+	binary.LittleEndian.PutUint16(header[22:24], 1)
+	binary.LittleEndian.PutUint32(header[24:28], sampleRate)
+	binary.LittleEndian.PutUint32(header[28:32], sampleRate*2)
+	binary.LittleEndian.PutUint16(header[32:34], 2)
+	binary.LittleEndian.PutUint16(header[34:36], 16)
+	copy(header[36:40], "data")
+	binary.LittleEndian.PutUint32(header[40:44], uint32(dataSize))
+	if _, err := f.Write(header); err != nil {
+		f.Close()
+		return fmt.Errorf("write audio test WAV header: %w", err)
+	}
+	for i := 0; i < samples; i++ {
+		// Fade the tone in and out to avoid clicks on playback.
+		envelope := math.Min(1, math.Min(float64(i)/400, float64(samples-1-i)/400))
+		value := int16(math.Sin(2*math.Pi*440*float64(i)/sampleRate) * 6000 * envelope)
+		if err := binary.Write(f, binary.LittleEndian, value); err != nil {
+			f.Close()
+			return fmt.Errorf("write audio test WAV data: %w", err)
+		}
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return fmt.Errorf("flush audio test WAV: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("close audio test WAV: %w", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.Size() != int64(44+dataSize) {
+		if err != nil {
+			return fmt.Errorf("verify audio test WAV: %w", err)
+		}
+		return fmt.Errorf("verify audio test WAV: incomplete file (%d bytes)", info.Size())
+	}
+	if err := setWAVVolume(path, volume); err != nil {
+		return fmt.Errorf("prepare audio test WAV: %w", err)
+	}
+	return PlayWAV(ctx, path, device)
+}
+
 func Speak(ctx context.Context, text, model, engine, device string, volume int) error {
 	if strings.TrimSpace(text) == "" {
 		return fmt.Errorf("empty announcement")
@@ -146,6 +211,13 @@ func Speak(ctx context.Context, text, model, engine, device string, volume int) 
 	if b, e := p.CombinedOutput(); e != nil {
 		return fmt.Errorf("TTS engine: %w: %s", e, strings.TrimSpace(string(b)))
 	}
+	info, err := os.Stat(tmp)
+	if err != nil {
+		return fmt.Errorf("TTS engine did not create its WAV output: %w", err)
+	}
+	if info.Size() < 44 {
+		return fmt.Errorf("TTS engine created an incomplete WAV output (%d bytes)", info.Size())
+	}
 	if err := setWAVVolume(tmp, volume); err != nil {
 		return fmt.Errorf("set announcement volume: %w", err)
 	}
@@ -154,7 +226,11 @@ func Speak(ctx context.Context, text, model, engine, device string, volume int) 
 
 func resolveEngine(engine string) (string, error) {
 	if engine != "piper" {
-		return engine, nil
+		path, err := exec.LookPath(engine)
+		if err != nil {
+			return "", fmt.Errorf("TTS engine %q was not found: %w", engine, err)
+		}
+		return path, nil
 	}
 	if path, err := exec.LookPath(engine); err == nil {
 		return path, nil

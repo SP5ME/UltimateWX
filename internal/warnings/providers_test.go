@@ -276,6 +276,16 @@ func TestIMGWFetchNormalizesPolishAlertAndSkipsInvalidRecords(t *testing.T) {
 	}
 }
 
+func TestIMGWFetchAcceptsNoWarningsMessage(t *testing.T) {
+	alerts, err := (IMGW{Client: staticHTTPClient(`{"message":"Brak ostrzeżeń meteorologicznych"}`), Endpoint: "https://example.test/warnings"}).Fetch(context.Background())
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+	if len(alerts) != 0 {
+		t.Fatalf("Fetch() returned %d alerts, want none", len(alerts))
+	}
+}
+
 func TestParseProbabilityAcceptsOnlyPercentRange(t *testing.T) {
 	for _, test := range []struct {
 		input string

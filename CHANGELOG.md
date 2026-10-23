@@ -4,6 +4,18 @@ W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na 
 
 ## [Unreleased]
 
+## [0.0.6-prealpha.18] - 2026-10-23
+
+### Naprawione
+- Adapter IMGW traktuje oficjalną odpowiedź „Brak ostrzeżeń meteorologicznych” jako pusty wynik zamiast błędu dekodowania.
+- Panel ostrzeżeń pokazuje czytelne statusy źródeł, ukrywa surowe błędy w rozwijanej sekcji i pomija zerowe znaczniki czasu.
+- Test wyjścia audio odtwarza krótki sygnał niezależnie od Pipera; plik WAV jest sprawdzany przed odtworzeniem.
+- Testy znaczników czasu APRS używają teraz zgodnego z protokołem 24-godzinnego czasu UTC.
+
+### Ulepszone
+- Ustawienia audio pokazują gotowość silnika mowy, modelu głosu, odtwarzacza i wyjścia; pobrany model pozostaje zainstalowany, jeśli nie powiedzie się jego test odtwarzania.
+- CI pomija powtórzone testy i walidację statyczną na runnerze cross-build ARMv7, zachowując natywne testy AMD64 i ARM64 oraz testy uruchomieniowe ARMv7.
+
 ## [0.0.6-prealpha.17] - 2026-10-23
 
 ### Fixed

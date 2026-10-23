@@ -10,9 +10,6 @@ import (
 
 // setWAVVolume applies a software output level to uncompressed PCM/IEEE-float WAV data.
 func setWAVVolume(path string, percent int) error {
-	if percent == 100 {
-		return nil
-	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
@@ -54,6 +51,9 @@ func setWAVVolume(path string, percent int) error {
 	}
 	if !hasFormat || !hasData {
 		return errors.New("WAV file is missing format or audio data")
+	}
+	if percent == 100 {
+		return nil
 	}
 	for _, chunk := range chunks {
 		if err := scaleWAVSamples(data[chunk[0]:chunk[1]], format, bits, percent); err != nil {

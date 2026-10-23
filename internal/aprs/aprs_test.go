@@ -62,7 +62,7 @@ func TestWeatherFrameWithoutPositionRemainsVisibleButIneligible(t *testing.T) {
 func TestTimestampedWeatherUsesReportTimeAndRejectsStaleReports(t *testing.T) {
 	received := time.Now().UTC().Truncate(time.Minute)
 	position := "5230.00N/02100.00E_t020"
-	frame, err := ParseTNC2("WX1ABC>APRS:@"+received.Format("020304")+"z"+position, received, 52.5, 21, 10)
+	frame, err := ParseTNC2("WX1ABC>APRS:@"+received.Format("021504")+"z"+position, received, 52.5, 21, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestTimestampedWeatherUsesReportTimeAndRejectsStaleReports(t *testing.T) {
 		t.Fatalf("report timestamp was not applied: %+v", frame)
 	}
 	old := received.Add(-3 * time.Hour)
-	frame, err = ParseTNC2("WX1ABC>APRS:@"+old.Format("020304")+"z"+position, received, 52.5, 21, 10)
+	frame, err = ParseTNC2("WX1ABC>APRS:@"+old.Format("021504")+"z"+position, received, 52.5, 21, 10)
 	if err != nil {
 		t.Fatal(err)
 	}

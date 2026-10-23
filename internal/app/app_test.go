@@ -153,7 +153,7 @@ func TestConfigurationBackupPreservesPanelCredentialsAndIntegrationSecrets(t *te
 	}
 }
 
-func TestAudioOutputTestRequiresInstalledVoice(t *testing.T) {
+func TestAudioOutputTestDoesNotRequireInstalledVoice(t *testing.T) {
 	dir := t.TempDir()
 	a, err := New(filepath.Join(dir, "config.json"), filepath.Join(dir, "data"))
 	if err != nil {
@@ -162,25 +162,11 @@ func TestAudioOutputTestRequiresInstalledVoice(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/api/audio/test-output", strings.NewReader(`{"device":""}`))
 	response := httptest.NewRecorder()
 	a.testAudioOutput(response, request)
-	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "download a TTS voice") {
+	if response.Code != http.StatusOK && response.Code != http.StatusBadGateway {
 		t.Fatalf("test output without a voice: status=%d body=%s", response.Code, response.Body.String())
 	}
-}
-
-func TestAudioOutputTestSampleUsesVoiceLanguage(t *testing.T) {
-	tests := []struct {
-		voice string
-		want  string
-	}{
-		{voice: `C:\voices\pl_PL-darkman-medium.onnx`, want: "To jest test wyjścia audio stacji pogodowej."},
-		{voice: "/voices/de_DE-thorsten-medium.onnx", want: "Dies ist ein Test des Audioausgangs der Wetterstation."},
-		{voice: "/voices/en_US-lessac-medium.onnx", want: "This is a test of the selected weather station audio output."},
-		{voice: "/voices/unknown.onnx", want: "This is a test of the selected weather station audio output."},
-	}
-	for _, test := range tests {
-		if got := audioOutputTestSample(test.voice); got != test.want {
-			t.Errorf("audioOutputTestSample(%q) = %q, want %q", test.voice, got, test.want)
-		}
+	if strings.Contains(response.Body.String(), "download a TTS voice") {
+		t.Fatalf("output test unexpectedly required a TTS voice: %s", response.Body.String())
 	}
 }
 

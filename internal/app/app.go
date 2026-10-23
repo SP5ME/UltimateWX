@@ -1623,10 +1623,6 @@ func (a *App) testAudioOutput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c := a.Config()
-	if strings.TrimSpace(c.TTSVoice) == "" {
-		writeError(w, http.StatusBadRequest, "Select and download a TTS voice before testing audio output.")
-		return
-	}
 	if request.Device != "" {
 		available := false
 		for _, device := range audio.List().Outputs {
@@ -1640,36 +1636,16 @@ func (a *App) testAudioOutput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	sample := audioOutputTestSample(c.TTSVoice)
-	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 	a.speechMu.Lock()
-	err := audio.Speak(ctx, sample, c.TTSVoice, c.TTSBinary, request.Device, c.AudioVolume)
+	err := audio.TestOutput(ctx, request.Device, c.AudioVolume)
 	a.speechMu.Unlock()
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
-}
-
-func audioOutputTestSample(voicePath string) string {
-	voiceName := strings.TrimSuffix(filepath.Base(strings.ReplaceAll(voicePath, "\\", "/")), filepath.Ext(voicePath))
-	language, _, _ := strings.Cut(strings.ToLower(voiceName), "_")
-	switch language {
-	case "pl":
-		return "To jest test wyjścia audio stacji pogodowej."
-	case "de":
-		return "Dies ist ein Test des Audioausgangs der Wetterstation."
-	case "fr":
-		return "Ceci est un test de la sortie audio de la station météo."
-	case "es":
-		return "Esta es una prueba de la salida de audio de la estación meteorológica."
-	case "it":
-		return "Questa è una prova dell'uscita audio della stazione meteo."
-	default:
-		return "This is a test of the selected weather station audio output."
-	}
 }
 
 func (a *App) ttsCatalog(w http.ResponseWriter, r *http.Request) {
@@ -1874,6 +1850,10 @@ func (a *App) ttsTest(w http.ResponseWriter, r *http.Request) {
 	err = audio.Speak(ctx, sample, model, c.TTSBinary, c.AudioOutput, c.AudioVolume)
 	a.speechMu.Unlock()
 	if err != nil {
+		if downloaded {
+			writeJSON(w, http.StatusBadGateway, map[string]any{"error": err.Error(), "downloaded": true})
+			return
+		}
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
