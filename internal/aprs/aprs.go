@@ -359,6 +359,33 @@ func DecodeKISS(frame []byte) ([]byte, bool) {
 	}
 	return body[1:], true
 }
+
+// KISSStreamDecoder assembles complete KISS data frames from arbitrary TCP chunks.
+// The zero value is ready to use.
+type KISSStreamDecoder struct {
+	frame []byte
+}
+
+// Feed adds bytes from a TCP read and returns decoded AX.25 payloads.
+func (d *KISSStreamDecoder) Feed(data []byte) [][]byte {
+	var packets [][]byte
+	for _, b := range data {
+		if b != 0xC0 {
+			if len(d.frame) < 4096 {
+				d.frame = append(d.frame, b)
+			}
+			continue
+		}
+		if len(d.frame) > 1 {
+			if packet, ok := DecodeKISS(append(d.frame, b)); ok {
+				packets = append(packets, packet)
+			}
+		}
+		d.frame = []byte{0xC0}
+	}
+	return packets
+}
+
 func AX25ToTNC2(packet []byte) (string, error) {
 	if len(packet) < 16 {
 		return "", fmt.Errorf("short AX.25 frame")

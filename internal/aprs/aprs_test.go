@@ -1,6 +1,7 @@
 package aprs
 
 import (
+	"bytes"
 	"testing"
 	"time"
 )
@@ -162,6 +163,24 @@ func TestNonWeatherFrameAndKISS(t *testing.T) {
 	got, ok := DecodeKISS([]byte{0xC0, 0x00, 0x01, 0x02, 0xC0})
 	if !ok || len(got) != 2 || got[0] != 1 {
 		t.Fatalf("KISS decode: %v %v", got, ok)
+	}
+}
+
+func TestKISSStreamDecoderHandlesTCPChunkBoundaries(t *testing.T) {
+	var decoder KISSStreamDecoder
+	first := decoder.Feed([]byte{0xC0, 0x00, 0x01, 0xDB})
+	if len(first) != 0 {
+		t.Fatalf("incomplete TCP chunk produced packets: %v", first)
+	}
+	second := decoder.Feed([]byte{0xDC, 0x03, 0xC0, 0xC0, 0x00, 0x02, 0x03, 0xC0})
+	if len(second) != 2 {
+		t.Fatalf("decoded %d packets, want 2", len(second))
+	}
+	if got, want := second[0], []byte{0x01, 0xC0, 0x03}; !bytes.Equal(got, want) {
+		t.Fatalf("first packet = %v, want %v", got, want)
+	}
+	if got, want := second[1], []byte{0x02, 0x03}; !bytes.Equal(got, want) {
+		t.Fatalf("second packet = %v, want %v", got, want)
 	}
 }
 

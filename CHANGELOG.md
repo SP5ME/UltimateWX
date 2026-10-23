@@ -4,6 +4,12 @@ W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na 
 
 ## [Unreleased]
 
+## [0.0.6-prealpha.17] - 2026-10-23
+
+### Fixed
+- Odbiór KISS TCP poprawnie składa ramki podzielone między odczyty sieciowe i przekazuje kompletne ramki AX.25 do parsera APRS.
+- Status APRS pokazuje stan połączenia TCP i liczniki odebranych ramek, co ułatwia diagnozowanie źródła bez świeżych pomiarów pogodowych.
+
 ## [0.0.6-prealpha.16] - 2026-10-23
 
 ### Fixed

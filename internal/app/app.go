@@ -59,6 +59,8 @@ type App struct {
 	bmeLastError        string
 	sourceHealthMu      sync.RWMutex
 	sourceHealth        map[string]sourceHealth
+	aprsDiagMu          sync.RWMutex
+	aprsDiag            aprsReceiveDiagnostics
 	voices              *tts.Service
 	snapshot            weather.Snapshot
 	snapMu              sync.RWMutex
@@ -88,6 +90,17 @@ type sourceHealth struct {
 	LastAttemptAt time.Time `json:"last_attempt_at,omitempty"`
 	LastSuccessAt time.Time `json:"last_success_at,omitempty"`
 	Error         string    `json:"error,omitempty"`
+}
+
+type aprsReceiveDiagnostics struct {
+	Connected           bool      `json:"connected"`
+	ConnectedAt         time.Time `json:"connected_at,omitempty"`
+	LastDataAt          time.Time `json:"last_data_at,omitempty"`
+	BytesReceived       uint64    `json:"bytes_received"`
+	KISSFrames          uint64    `json:"kiss_frames"`
+	AX25Frames          uint64    `json:"ax25_frames"`
+	FramesStored        uint64    `json:"frames_stored"`
+	LastProcessingError string    `json:"last_processing_error,omitempty"`
 }
 
 type warningProviderHealth struct {
@@ -417,6 +430,68 @@ func (a *App) sourceHealthSnapshot() map[string]sourceHealth {
 	}
 	return result
 }
+
+func (a *App) aprsDiagnosticsSnapshot() aprsReceiveDiagnostics {
+	a.aprsDiagMu.RLock()
+	defer a.aprsDiagMu.RUnlock()
+	return a.aprsDiag
+}
+
+func (a *App) setAPRSTCPConnected(connected bool) {
+	a.aprsDiagMu.Lock()
+	a.aprsDiag.Connected = connected
+	if connected {
+		a.aprsDiag.ConnectedAt = time.Now().UTC()
+	}
+	a.aprsDiagMu.Unlock()
+	if connected {
+		a.sourceHealthMu.Lock()
+		state := a.sourceHealth["aprs"]
+		state.Error = ""
+		a.sourceHealth["aprs"] = state
+		a.sourceHealthMu.Unlock()
+	}
+}
+
+func (a *App) recordAPRSBytes(count int) {
+	if count <= 0 {
+		return
+	}
+	a.aprsDiagMu.Lock()
+	a.aprsDiag.BytesReceived += uint64(count)
+	a.aprsDiag.LastDataAt = time.Now().UTC()
+	a.aprsDiagMu.Unlock()
+}
+
+func (a *App) recordAPRSKISSFrame() {
+	a.aprsDiagMu.Lock()
+	a.aprsDiag.KISSFrames++
+	a.aprsDiag.LastProcessingError = ""
+	a.aprsDiagMu.Unlock()
+}
+
+func (a *App) recordAPRSAx25Frame() {
+	a.aprsDiagMu.Lock()
+	a.aprsDiag.AX25Frames++
+	a.aprsDiagMu.Unlock()
+}
+
+func (a *App) recordAPRSStoredFrame() {
+	a.aprsDiagMu.Lock()
+	a.aprsDiag.FramesStored++
+	a.aprsDiagMu.Unlock()
+}
+
+func (a *App) recordAPRSProcessingError(err error) {
+	a.aprsDiagMu.Lock()
+	if err == nil {
+		a.aprsDiag.LastProcessingError = ""
+	} else {
+		a.aprsDiag.LastProcessingError = err.Error()
+	}
+	a.aprsDiagMu.Unlock()
+}
+
 func (a *App) Run(ctx context.Context) {
 	go a.weatherLoop(ctx)
 	go a.scheduleLoop(ctx)
@@ -924,7 +999,7 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	configuredSources := map[string]bool{"open_meteo": true, "aprs": c.APRSHost != "", "mqtt": c.MQTTBroker != "", "home_assistant": c.HAURL != "" && c.HAToken != "", "serial": c.SerialPort != "", "bme280": c.BMEEnabled}
-	writeJSON(w, 200, map[string]any{"version": updater.Version, "location": c.LocationName, "weather_updated_at": s.UpdatedAt, "weather_error": s.Error, "sources": map[string]any{"open_meteo": !openMeteoFresh, "aprs": !aprsFresh, "mqtt": !mqttFresh, "home_assistant": !haFresh, "serial": !serialFresh, "bme280": !bmeReceiving}, "source_configured": configuredSources, "source_last_reading_at": map[string]time.Time{"open_meteo": s.UpdatedAt, "aprs": aprsLastReading, "mqtt": mqttLastReading, "home_assistant": haLastReading, "serial": serialLastReading, "bme280": bmeLastReading}, "source_health": a.sourceHealthSnapshot(), "bme280": map[string]any{"enabled": c.BMEEnabled, "receiving": bmeReceiving, "last_reading_at": bmeLastReading, "error": bmeError}, "warnings": map[string]any{"enabled": c.WarningsEnabled, "last_updated_at": warningUpdatedAt, "error": warningError, "providers": warningProviders}, "schedule": scheduleStatus(c.Schedules, now.In(stationLocation(c.Timezone))), "tts_configured": c.TTSVoice != "", "tts_ready": ttsReady, "tts_components": map[string]bool{"engine": ttsEngineReady, "model": ttsModelReady, "audio_player": audioPlayerReady, "audio_output": audioOutputAvailable}, "audio_input": map[string]any{"device": c.AudioInput, "configured": c.AudioInput != "", "available": audioInputAvailable}, "audio_output": map[string]any{"device": c.AudioOutput, "available": audioOutputAvailable, "player_available": audioPlayerReady}, "audio": audioDevices, "uptime_seconds": int64(time.Since(startedAt).Seconds())})
+	writeJSON(w, 200, map[string]any{"version": updater.Version, "location": c.LocationName, "weather_updated_at": s.UpdatedAt, "weather_error": s.Error, "sources": map[string]any{"open_meteo": !openMeteoFresh, "aprs": !aprsFresh, "mqtt": !mqttFresh, "home_assistant": !haFresh, "serial": !serialFresh, "bme280": !bmeReceiving}, "source_configured": configuredSources, "source_last_reading_at": map[string]time.Time{"open_meteo": s.UpdatedAt, "aprs": aprsLastReading, "mqtt": mqttLastReading, "home_assistant": haLastReading, "serial": serialLastReading, "bme280": bmeLastReading}, "source_health": a.sourceHealthSnapshot(), "aprs_rx": a.aprsDiagnosticsSnapshot(), "bme280": map[string]any{"enabled": c.BMEEnabled, "receiving": bmeReceiving, "last_reading_at": bmeLastReading, "error": bmeError}, "warnings": map[string]any{"enabled": c.WarningsEnabled, "last_updated_at": warningUpdatedAt, "error": warningError, "providers": warningProviders}, "schedule": scheduleStatus(c.Schedules, now.In(stationLocation(c.Timezone))), "tts_configured": c.TTSVoice != "", "tts_ready": ttsReady, "tts_components": map[string]bool{"engine": ttsEngineReady, "model": ttsModelReady, "audio_player": audioPlayerReady, "audio_output": audioOutputAvailable}, "audio_input": map[string]any{"device": c.AudioInput, "configured": c.AudioInput != "", "available": audioInputAvailable}, "audio_output": map[string]any{"device": c.AudioOutput, "available": audioOutputAvailable, "player_available": audioPlayerReady}, "audio": audioDevices, "uptime_seconds": int64(time.Since(startedAt).Seconds())})
 }
 
 func speechReady(configured, engine, model, player, output bool) bool {
@@ -2750,48 +2825,58 @@ func (a *App) aprsLoop(ctx context.Context) {
 			addr := net.JoinHostPort(c.APRSHost, strconv.Itoa(c.APRSPort))
 			a.markSourceAttempt("aprs")
 			conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
-			if err == nil {
-				var frame []byte
+			if err != nil {
+				a.setAPRSTCPConnected(false)
+				a.markSourceError("aprs", "Nie można połączyć się z serwerem KISS")
+			} else {
+				a.setAPRSTCPConnected(true)
+				a.recordAPRSProcessingError(nil)
+				var kissDecoder aprs.KISSStreamDecoder
 				buf := make([]byte, 1024)
 				for {
 					_ = conn.SetReadDeadline(time.Now().Add(90 * time.Second))
 					n, readErr := conn.Read(buf)
+					if n > 0 {
+						a.recordAPRSBytes(n)
+						for _, packet := range kissDecoder.Feed(buf[:n]) {
+							a.recordAPRSKISSFrame()
+							line, decodeErr := aprs.AX25ToTNC2(packet)
+							if decodeErr != nil {
+								a.recordAPRSProcessingError(decodeErr)
+								continue
+							}
+							a.recordAPRSAx25Frame()
+							a.recordAPRSProcessingError(nil)
+							a.markSourceSuccess("aprs")
+							cfg := a.Config()
+							parsed, parseErr := aprs.ParseTNC2(line, time.Now(), cfg.Latitude, cfg.Longitude, cfg.APRSRadiusKM)
+							if parseErr != nil {
+								a.recordAPRSProcessingError(parseErr)
+								continue
+							}
+							parsed = aprs.ApplyBlacklist(parsed, cfg.APRSBlacklist)
+							parsed = aprs.ApplyFrameBlacklist(parsed, cfg.APRSFrameBlacklist)
+							if storeErr := a.history.AddFrame(parsed); storeErr == nil {
+								a.recordAPRSStoredFrame()
+								if parsed.Eligible {
+									for _, observation := range parsed.Data {
+										_ = a.history.AddObservation(observation)
+									}
+								}
+							} else {
+								a.recordAPRSProcessingError(storeErr)
+							}
+						}
+					}
 					if readErr != nil {
+						a.setAPRSTCPConnected(false)
 						if ctx.Err() == nil {
 							a.markSourceError("aprs", "Połączenie z serwerem KISS zostało przerwane")
 						}
 						break
 					}
-					for _, b := range buf[:n] {
-						if b == 0xC0 {
-							if len(frame) > 0 {
-								if packet, ok := aprs.DecodeKISS(frame); ok {
-									if line, decodeErr := aprs.AX25ToTNC2(packet); decodeErr == nil {
-										a.markSourceSuccess("aprs")
-										cfg := a.Config()
-										f, parseErr := aprs.ParseTNC2(line, time.Now(), cfg.Latitude, cfg.Longitude, cfg.APRSRadiusKM)
-										if parseErr == nil {
-											f = aprs.ApplyBlacklist(f, cfg.APRSBlacklist)
-											f = aprs.ApplyFrameBlacklist(f, cfg.APRSFrameBlacklist)
-											_ = a.history.AddFrame(f)
-											if f.Eligible {
-												for _, o := range f.Data {
-													_ = a.history.AddObservation(o)
-												}
-											}
-										}
-									}
-								}
-							}
-							frame = []byte{0xC0}
-						} else if len(frame) < 4096 {
-							frame = append(frame, b)
-						}
-					}
 				}
 				_ = conn.Close()
-			} else {
-				a.markSourceError("aprs", "Nie można połączyć się z serwerem KISS")
 			}
 			select {
 			case <-ctx.Done():
@@ -2799,6 +2884,7 @@ func (a *App) aprsLoop(ctx context.Context) {
 			case <-time.After(5 * time.Second):
 			}
 		} else {
+			a.setAPRSTCPConnected(false)
 			select {
 			case <-ctx.Done():
 				return
