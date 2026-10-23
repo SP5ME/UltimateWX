@@ -286,6 +286,17 @@ func TestIMGWFetchAcceptsNoWarningsMessage(t *testing.T) {
 	}
 }
 
+func TestIMGWFetchAcceptsSingleAlertObject(t *testing.T) {
+	const response = `{"id":"42","nazwa_zdarzenia":"Wiatr","stopien":"1","obowiazuje_od":"2026-01-10 12:00:00","obowiazuje_do":"2026-01-10 18:00:00","teryt":["1465"]}`
+	alerts, err := (IMGW{Client: staticHTTPClient(response), Endpoint: "https://example.test/warnings"}).Fetch(context.Background())
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+	if len(alerts) != 1 || alerts[0].ID != "42" || alerts[0].Event != "Wiatr" {
+		t.Fatalf("Fetch() returned %+v, want one normalized alert", alerts)
+	}
+}
+
 func TestParseProbabilityAcceptsOnlyPercentRange(t *testing.T) {
 	for _, test := range []struct {
 		input string

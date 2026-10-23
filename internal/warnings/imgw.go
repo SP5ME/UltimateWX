@@ -63,7 +63,7 @@ func (p IMGW) Fetch(ctx context.Context) ([]Alert, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("IMGW returned %s", resp.Status)
 	}
-	var raw []struct {
+	type imgwAlert struct {
 		ID          string   `json:"id"`
 		Event       string   `json:"nazwa_zdarzenia"`
 		Severity    string   `json:"stopien"`
@@ -76,12 +76,13 @@ func (p IMGW) Fetch(ctx context.Context) ([]Alert, error) {
 		Office      string   `json:"biuro"`
 		AreaCodes   []string `json:"teryt"`
 	}
+	var raw []imgwAlert
 	body, err := readLimitedBody(resp.Body, 4<<20)
 	if err != nil {
 		return nil, fmt.Errorf("read IMGW warnings: %w", err)
 	}
-	// IMGW returns an object with a message instead of an empty array when
-	// there are currently no meteorological warnings.
+	// IMGW normally returns an array, but may return a single alert as an
+	// object. It also returns a message object when there are no warnings.
 	if len(strings.TrimSpace(string(body))) > 0 && strings.TrimSpace(string(body))[0] == '{' {
 		var response struct {
 			Message string `json:"message"`
@@ -92,9 +93,19 @@ func (p IMGW) Fetch(ctx context.Context) ([]Alert, error) {
 		if strings.EqualFold(strings.TrimSpace(response.Message), "Brak ostrzeżeń meteorologicznych") {
 			return []Alert{}, nil
 		}
-		return nil, fmt.Errorf("unexpected IMGW warnings response: %s", strings.TrimSpace(response.Message))
-	}
-	if err := json.Unmarshal(body, &raw); err != nil {
+		var single imgwAlert
+		if err := json.Unmarshal(body, &single); err != nil {
+			return nil, fmt.Errorf("decode IMGW warning object: %w", err)
+		}
+		if strings.TrimSpace(single.ID) == "" {
+			message := strings.TrimSpace(response.Message)
+			if message == "" {
+				message = "response object does not contain an alert ID"
+			}
+			return nil, fmt.Errorf("unexpected IMGW warnings response: %s", message)
+		}
+		raw = []imgwAlert{single}
+	} else if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, fmt.Errorf("decode IMGW warnings: %w", err)
 	}
 	location, err := time.LoadLocation("Europe/Warsaw")
