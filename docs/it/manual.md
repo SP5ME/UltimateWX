@@ -9,7 +9,7 @@ UltimateWX è un annunciatore meteo locale per Linux e stazioni radioamatoriali.
 
 ## Installazione
 
-L’installer delle release supporta Raspberry Pi OS, Ubuntu e Alpine Linux su ARMv7, ARM64 e x86-64. Versioni minime supportate: Raspberry Pi OS/Debian 12, Ubuntu 24.04 LTS e Alpine Linux 3.22. Dopo la pubblicazione del repository, esegui il comando indicato nel README con privilegi amministrativi, normalmente tramite `sudo`. L’installer rileva distribuzione, architettura e sistema init, scarica l’archivio corretto, verifica il checksum SHA-256, installa il servizio e abilita l’avvio automatico. Su Raspberry Pi OS/Debian e Ubuntu per x86-64 o ARM64 installa anche Piper TTS in un ambiente Python separato. Piper resta facoltativo su Alpine e ARMv7 perché il pacchetto ufficiale non pubblica un wheel precompilato compatibile con queste piattaforme.
+L’installer delle release supporta Raspberry Pi OS, Ubuntu e Alpine Linux su ARMv7, ARM64 e x86-64. Versioni minime supportate: Raspberry Pi OS/Debian 12, Ubuntu 24.04 LTS e Alpine Linux 3.22. Dopo la pubblicazione del repository, esegui il comando indicato nel README con privilegi amministrativi, normalmente tramite `sudo`. L’installer rileva distribuzione, architettura e sistema init, scarica l’archivio corretto, verifica il checksum SHA-256, installa il servizio e abilita l’avvio automatico. Su Raspberry Pi OS/Debian e Ubuntu per x86-64/ARM64 installa Piper 1.8.0 in un ambiente isolato in `/opt/ultimatewx/piper`. Su ARMv7 installa una versione sperimentale di Piper 1.2.0 nella stessa cartella. Alpine non riceve un’installazione automatica; un motore compatibile con musl può essere configurato manualmente nelle impostazioni avanzate.
 
 Al primo avvio, inserisci prima il token di configurazione monouso, poi imposta una password oppure continua senza accesso. In seguito apparirà la procedura guidata della stazione. Senza password, chiunque possa raggiungere il pannello può usarlo; usa questa modalità solo su una rete locale fidata.
 
@@ -64,7 +64,7 @@ Per collegare direttamente un BME280 a Raspberry Pi, abilita il profilo I²C, im
 
 **Un frame vicino non viene utilizzato.** Controlla posizione, campi meteo, ora di ricezione e distanza nel monitor. Aumenta il raggio solo se corrisponde alla copertura desiderata.
 
-**La voce TTS non è disponibile.** Nella scheda voce scegli una lingua e carica il catalogo quando Internet è disponibile. L’applicazione mostra solo licenze riconosciute e verifica i file del modello. L’installer Linux installa automaticamente Piper TTS sui sistemi Debian/Raspberry Pi OS e Ubuntu supportati. Su Alpine e ARMv7, installa Piper separatamente e inserisci il percorso dell’eseguibile nel campo Comando Piper. Le voci scaricate restano locali.
+**La voce TTS non è disponibile.** Nella sezione Voce e annunci scegli una lingua, carica il catalogo e scarica una voce. Il catalogo richiede Internet; i modelli scaricati funzionano localmente. L’installer di sistema colloca Piper in `/opt/ultimatewx/piper` su Debian/Raspberry Pi OS e Ubuntu x86-64/ARM64 e installa una versione sperimentale su ARMv7. Se l’installazione non riesce o usi Alpine, installa un motore compatibile e inserisci il percorso nelle impostazioni audio avanzate compresse.
 
 **Che cosa significa la stima offline?** È un semplice indicatore della tendenza della pressione, non una previsione meteorologica. Richiede almeno due misure recenti di pressione di stazione distanti almeno un’ora, negli ultimi cinque ore. L’annuncio la identifica come stima locale.
 

@@ -227,20 +227,32 @@ func Speak(ctx context.Context, text, model, engine, device string, volume int) 
 func resolveEngine(engine string) (string, error) {
 	if engine != "piper" {
 		path, err := exec.LookPath(engine)
-		if err != nil {
-			return "", fmt.Errorf("TTS engine %q was not found: %w", engine, err)
+		if err == nil {
+			return path, nil
 		}
+		if path, ok := managedPiperPath(); ok {
+			return path, nil
+		}
+		return "", fmt.Errorf("TTS engine %q was not found: %w", engine, err)
+	}
+	if path, ok := managedPiperPath(); ok {
 		return path, nil
 	}
 	if path, err := exec.LookPath(engine); err == nil {
 		return path, nil
 	}
+	return "", fmt.Errorf("Piper TTS nie jest zainstalowany; uruchom ponownie instalator systemowy UltimateWX albo wskaż własny silnik w zaawansowanych ustawieniach audio")
+}
+
+func managedPiperPath() (string, bool) {
 	for _, path := range []string{
+		"/opt/ultimatewx/piper/bin/piper",
+		"/opt/ultimatewx/piper/piper",
 		"/opt/ultimatewx/piper-venv/bin/piper",
 	} {
 		if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0 {
-			return path, nil
+			return path, true
 		}
 	}
-	return "", fmt.Errorf("Piper TTS nie jest zainstalowany; uruchom aktualizację aplikacji albo instalator systemowy")
+	return "", false
 }

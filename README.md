@@ -24,7 +24,7 @@ Instalator najnowszego wydania można uruchomić jednym poleceniem:
 curl -fsSL https://raw.githubusercontent.com/SP5ME/UltimateWX/main/scripts/install.sh | sudo sh
 ```
 
-Minimalne wspierane wersje to Raspberry Pi OS/Debian 12, Ubuntu 24.04 LTS i Alpine Linux 3.22. Instalator obsługuje te systemy na ARMv7, ARM64 oraz x86-64, korzystając z systemd lub OpenRC. Instrukcja zawiera też skrypt odinstalowujący, który domyślnie zachowuje dane. Piper TTS instaluje automatycznie na Raspberry Pi OS/Debian i Ubuntu dla ARM64 oraz x86-64; na Alpine i ARMv7 pakiet nie ma zgodnego oficjalnego pliku binarnego. Szczegóły: [dokumentacja instalacji](docs/pl/manual.md#instalacja).
+Minimalne wspierane wersje to Raspberry Pi OS/Debian 12, Ubuntu 24.04 LTS i Alpine Linux 3.22. Instalator obsługuje te systemy na ARMv7, ARM64 oraz x86-64, korzystając z systemd lub OpenRC. Instrukcja zawiera też skrypt odinstalowujący, który domyślnie zachowuje dane. Piper TTS instaluje się w stałym katalogu `/opt/ultimatewx/piper` na Raspberry Pi OS/Debian i Ubuntu dla ARM64 oraz x86-64; na ARMv7 instalator umieszcza tam eksperymentalny build, a Alpine wymaga ręcznej instalacji zgodnej z musl. Szczegóły: [dokumentacja instalacji](docs/pl/manual.md#instalacja).
 
 ## Dokumentacja
 

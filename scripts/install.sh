@@ -115,8 +115,16 @@ install_alsa_tools() {
 
 install_piper() {
   PIPER_VERSION=1.8.0
-  if command -v piper >/dev/null 2>&1; then
-    echo "Piper is already available: $(command -v piper)."
+  PIPER_DIR=/opt/ultimatewx/piper
+
+  # Keep the app-managed engine in one predictable directory. A system Piper
+  # remains untouched and can still be used as a fallback by the application.
+  if [ -x "$PIPER_DIR/piper" ]; then
+    echo "UltimateWX Piper is already installed under $PIPER_DIR."
+    return
+  fi
+  if [ -x "$PIPER_DIR/bin/piper" ] && "$PIPER_DIR/bin/python" -m pip show piper-tts >/dev/null 2>&1; then
+    echo "UltimateWX Piper is already installed under $PIPER_DIR."
     return
   fi
 
@@ -140,8 +148,8 @@ install_piper() {
         return
       fi
       tar -xzf "$TMP/$PIPER_ASSET" -C /opt/ultimatewx
-      if ! ln -sfn /opt/ultimatewx/piper/piper /usr/local/bin/piper; then
-        echo "Piper was installed under /opt/ultimatewx/piper, but its command could not be added to /usr/local/bin."
+      if [ ! -x "$PIPER_DIR/piper" ]; then
+        echo "Piper ARMv7 package was extracted, but its executable is missing or not executable."
         return
       fi
       echo "Installed experimental Piper 1.2.0 ARMv7 build from source. Test speech performance on this Raspberry Pi model."
@@ -162,16 +170,22 @@ install_piper() {
     return
   fi
 
-  PIPER_VENV=/opt/ultimatewx/piper-venv
-  if ! python3 -m venv "$PIPER_VENV" || ! "$PIPER_VENV/bin/python" -m pip install --disable-pip-version-check --only-binary=:all: "piper-tts==$PIPER_VERSION"; then
-    echo "Piper installation failed; UltimateWX will still start, but speech output needs Piper installed separately."
+  if ! install -d -o root -g root -m 0755 "$PIPER_DIR" || ! python3 -m venv "$PIPER_DIR"; then
+    echo "Piper installation failed under $PIPER_DIR; UltimateWX will still start, but speech output needs Piper installed separately."
     return
   fi
-  if ! ln -sfn "$PIPER_VENV/bin/piper" /usr/local/bin/piper; then
-    echo "Piper was installed at $PIPER_VENV/bin/piper, but its command could not be added to /usr/local/bin."
+  if [ -x "$PIPER_DIR/bin/piper" ]; then
+    if "$PIPER_DIR/bin/python" -m pip install --disable-pip-version-check --only-binary=:all: --force-reinstall "piper-tts==$PIPER_VERSION"; then PIPER_INSTALL_OK=yes
+    else PIPER_INSTALL_OK=no; fi
+  else
+    if "$PIPER_DIR/bin/python" -m pip install --disable-pip-version-check --only-binary=:all: "piper-tts==$PIPER_VERSION"; then PIPER_INSTALL_OK=yes
+    else PIPER_INSTALL_OK=no; fi
+  fi
+  if [ "$PIPER_INSTALL_OK" != yes ] || [ ! -x "$PIPER_DIR/bin/piper" ]; then
+    echo "Piper installation failed under $PIPER_DIR; UltimateWX will still start, but speech output needs Piper installed separately."
     return
   fi
-  echo "Installed Piper TTS $PIPER_VERSION."
+  echo "Installed Piper TTS $PIPER_VERSION under $PIPER_DIR."
 }
 
 install_alsa_tools
