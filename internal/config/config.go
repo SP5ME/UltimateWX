@@ -45,52 +45,53 @@ type SensorDeviceConfig struct {
 }
 
 type Config struct {
-	PasswordHash          string                        `json:"password_hash,omitempty"`
-	AuthDisabled          bool                          `json:"auth_disabled,omitempty"`
-	Latitude              float64                       `json:"latitude"`
-	Longitude             float64                       `json:"longitude"`
-	AltitudeM             float64                       `json:"altitude_m"`
-	LocationName          string                        `json:"location_name"`
-	Timezone              string                        `json:"timezone"`
-	Units                 string                        `json:"units"`
-	Locale                string                        `json:"locale"`
-	StationCallsign       string                        `json:"station_callsign"`
-	StationLocator        string                        `json:"station_locator"`
-	APRSRadiusKM          float64                       `json:"aprs_radius_km"`
-	APRSBlacklist         []string                      `json:"aprs_blacklist"`
-	APRSFrameBlacklist    []string                      `json:"aprs_frame_blacklist,omitempty"`
-	WarningsEnabled       bool                          `json:"warnings_enabled"`
-	WarningTERYT          []string                      `json:"warning_teryt_codes"`
-	WarningRepeat1        int                           `json:"warning_repeat_level_1_minutes"`
-	WarningRepeat2        int                           `json:"warning_repeat_level_2_minutes"`
-	WarningRepeat3        int                           `json:"warning_repeat_level_3_minutes"`
-	WeatherSource         string                        `json:"weather_source"`
-	WeatherSourceOrder    map[string][]string           `json:"weather_source_order,omitempty"`
-	APRSHost              string                        `json:"aprs_host"`
-	APRSPort              int                           `json:"aprs_port"`
-	AudioInput            string                        `json:"audio_input"`
-	AudioOutput           string                        `json:"audio_output"`
-	AudioVolume           int                           `json:"audio_volume"`
-	MQTTBroker            string                        `json:"mqtt_broker"`
-	MQTTTopic             string                        `json:"mqtt_topic"`
-	MQTTSensorAltitudeM   *float64                      `json:"mqtt_sensor_altitude_m,omitempty"`
-	MQTTUsername          string                        `json:"mqtt_username,omitempty"`
-	MQTTPassword          string                        `json:"mqtt_password,omitempty"`
-	HAURL                 string                        `json:"ha_url"`
-	HAToken               string                        `json:"ha_token,omitempty"`
-	SerialPort            string                        `json:"serial_port"`
-	SerialBaud            int                           `json:"serial_baud"`
-	SerialSensorAltitudeM *float64                      `json:"serial_sensor_altitude_m,omitempty"`
-	SensorDevices         map[string]SensorDeviceConfig `json:"sensor_devices,omitempty"`
-	BMEEnabled            bool                          `json:"bme_enabled"`
-	I2CDevice             string                        `json:"i2c_device"`
-	I2CAddress            int                           `json:"i2c_address"`
-	TTSBinary             string                        `json:"tts_binary"`
-	TTSVoice              string                        `json:"tts_voice"`
-	HistoryDays           int                           `json:"history_days"`
-	Schedules             []Schedule                    `json:"schedules"`
-	Blocks                []Block                       `json:"blocks"`
-	UpdatedAt             time.Time                     `json:"updated_at"`
+	PasswordHash             string                        `json:"password_hash,omitempty"`
+	AuthDisabled             bool                          `json:"auth_disabled,omitempty"`
+	Latitude                 float64                       `json:"latitude"`
+	Longitude                float64                       `json:"longitude"`
+	AltitudeM                float64                       `json:"altitude_m"`
+	LocationName             string                        `json:"location_name"`
+	Timezone                 string                        `json:"timezone"`
+	Units                    string                        `json:"units"`
+	Locale                   string                        `json:"locale"`
+	StationCallsign          string                        `json:"station_callsign"`
+	StationLocator           string                        `json:"station_locator"`
+	APRSRadiusKM             float64                       `json:"aprs_radius_km"`
+	APRSBlacklist            []string                      `json:"aprs_blacklist"`
+	APRSFrameBlacklist       []string                      `json:"aprs_frame_blacklist,omitempty"`
+	WarningsEnabled          bool                          `json:"warnings_enabled"`
+	WarningDisabledProviders []string                      `json:"warning_disabled_providers,omitempty"`
+	WarningTERYT             []string                      `json:"warning_teryt_codes"`
+	WarningRepeat1           int                           `json:"warning_repeat_level_1_minutes"`
+	WarningRepeat2           int                           `json:"warning_repeat_level_2_minutes"`
+	WarningRepeat3           int                           `json:"warning_repeat_level_3_minutes"`
+	WeatherSource            string                        `json:"weather_source"`
+	WeatherSourceOrder       map[string][]string           `json:"weather_source_order,omitempty"`
+	APRSHost                 string                        `json:"aprs_host"`
+	APRSPort                 int                           `json:"aprs_port"`
+	AudioInput               string                        `json:"audio_input"`
+	AudioOutput              string                        `json:"audio_output"`
+	AudioVolume              int                           `json:"audio_volume"`
+	MQTTBroker               string                        `json:"mqtt_broker"`
+	MQTTTopic                string                        `json:"mqtt_topic"`
+	MQTTSensorAltitudeM      *float64                      `json:"mqtt_sensor_altitude_m,omitempty"`
+	MQTTUsername             string                        `json:"mqtt_username,omitempty"`
+	MQTTPassword             string                        `json:"mqtt_password,omitempty"`
+	HAURL                    string                        `json:"ha_url"`
+	HAToken                  string                        `json:"ha_token,omitempty"`
+	SerialPort               string                        `json:"serial_port"`
+	SerialBaud               int                           `json:"serial_baud"`
+	SerialSensorAltitudeM    *float64                      `json:"serial_sensor_altitude_m,omitempty"`
+	SensorDevices            map[string]SensorDeviceConfig `json:"sensor_devices,omitempty"`
+	BMEEnabled               bool                          `json:"bme_enabled"`
+	I2CDevice                string                        `json:"i2c_device"`
+	I2CAddress               int                           `json:"i2c_address"`
+	TTSBinary                string                        `json:"tts_binary"`
+	TTSVoice                 string                        `json:"tts_voice"`
+	HistoryDays              int                           `json:"history_days"`
+	Schedules                []Schedule                    `json:"schedules"`
+	Blocks                   []Block                       `json:"blocks"`
+	UpdatedAt                time.Time                     `json:"updated_at"`
 }
 
 func Defaults() Config {
@@ -248,6 +249,14 @@ func Validate(c Config) error {
 	}
 	if len(c.WarningTERYT) > 20 {
 		return errors.New("at most 20 warning TERYT codes are allowed")
+	}
+	validWarningProviders := map[string]bool{"imgw": true, "dwd": true, "geosphere": true, "meteoalarm": true}
+	seenWarningProviders := make(map[string]bool, len(c.WarningDisabledProviders))
+	for _, provider := range c.WarningDisabledProviders {
+		if !validWarningProviders[provider] || seenWarningProviders[provider] {
+			return errors.New("disabled warning providers must be unique supported provider IDs")
+		}
+		seenWarningProviders[provider] = true
 	}
 	for _, code := range c.WarningTERYT {
 		if len(code) != 4 {

@@ -108,6 +108,36 @@ func TestWeatherSourceOrderValidation(t *testing.T) {
 	}
 }
 
+func TestWarningDisabledProvidersValidation(t *testing.T) {
+	c := Defaults()
+	c.WarningDisabledProviders = []string{"imgw", "meteoalarm"}
+	if err := Validate(c); err != nil {
+		t.Fatalf("supported disabled warning providers rejected: %v", err)
+	}
+	c.WarningDisabledProviders = []string{"unknown"}
+	if err := Validate(c); err == nil {
+		t.Fatal("unsupported warning provider accepted")
+	}
+	c.WarningDisabledProviders = []string{"dwd", "dwd"}
+	if err := Validate(c); err == nil {
+		t.Fatal("duplicate disabled warning provider accepted")
+	}
+}
+
+func TestLegacyConfigEnablesAllWarningProvidersByDefault(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy.json")
+	if err := os.WriteFile(path, []byte(`{"warnings_enabled":true}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.WarningDisabledProviders) != 0 {
+		t.Fatalf("legacy config unexpectedly disables warning providers: %v", c.WarningDisabledProviders)
+	}
+}
+
 func TestSensorDevicePreferenceValidation(t *testing.T) {
 	tests := []struct {
 		name    string

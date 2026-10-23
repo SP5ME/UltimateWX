@@ -203,7 +203,12 @@ func (a *App) setConfig(c config.Config) error {
 		a.warningUpdateMu.Unlock()
 	}
 	a.cfgMu.Unlock()
-	if previous.WarningsEnabled != c.WarningsEnabled || previous.Latitude != c.Latitude || previous.Longitude != c.Longitude || previous.Locale != c.Locale || strings.Join(previous.WarningTERYT, ",") != strings.Join(c.WarningTERYT, ",") {
+	if !sameWarningProviderSelection(previous.WarningDisabledProviders, c.WarningDisabledProviders) {
+		if err := a.pruneDisabledWarningAlerts(c); err != nil {
+			log.Printf("remove alerts from disabled warning sources: %v", err)
+		}
+	}
+	if previous.WarningsEnabled != c.WarningsEnabled || !sameWarningProviderSelection(previous.WarningDisabledProviders, c.WarningDisabledProviders) || previous.Latitude != c.Latitude || previous.Longitude != c.Longitude || previous.Locale != c.Locale || strings.Join(previous.WarningTERYT, ",") != strings.Join(c.WarningTERYT, ",") {
 		a.warningMu.Lock()
 		if previous.Latitude != c.Latitude || previous.Longitude != c.Longitude || strings.Join(previous.WarningTERYT, ",") != strings.Join(c.WarningTERYT, ",") {
 			a.warningCounty = ""
@@ -267,7 +272,7 @@ func (a *App) reconcilePolledWarningsForConfig(c config.Config, items []warnings
 	defer a.warningUpdateMu.Unlock()
 	now := time.Now().UTC()
 	for _, item := range a.history.Warnings() {
-		if item.Source == warnings.MeteoAlarmSource && item.ValidTo.After(now) {
+		if item.Source == warnings.MeteoAlarmSource && warningProviderEnabled(c, "meteoalarm") && item.ValidTo.After(now) {
 			items = append(items, item)
 		}
 	}
@@ -277,7 +282,7 @@ func (a *App) reconcilePolledWarningsForConfig(c config.Config, items []warnings
 func (a *App) applyMeteoAlarmResult(c config.Config, result warnings.MeteoAlarmResult) (bool, error) {
 	a.cfgMu.RLock()
 	defer a.cfgMu.RUnlock()
-	if !sameWarningConfig(a.cfg, c) || !c.WarningsEnabled {
+	if !sameWarningConfig(a.cfg, c) || !c.WarningsEnabled || !warningProviderEnabled(c, "meteoalarm") {
 		return false, nil
 	}
 	a.warningUpdateMu.Lock()
@@ -388,10 +393,54 @@ func cloneWarningProviderHealth(providers map[string]warningProviderHealth) map[
 
 func sameWarningConfig(current, requested config.Config) bool {
 	return current.WarningsEnabled == requested.WarningsEnabled &&
+		sameWarningProviderSelection(current.WarningDisabledProviders, requested.WarningDisabledProviders) &&
 		current.Latitude == requested.Latitude &&
 		current.Longitude == requested.Longitude &&
 		current.Locale == requested.Locale &&
 		strings.Join(current.WarningTERYT, ",") == strings.Join(requested.WarningTERYT, ",")
+}
+
+func sameWarningProviderSelection(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	selected := make(map[string]bool, len(a))
+	for _, provider := range a {
+		selected[provider] = true
+	}
+	for _, provider := range b {
+		if !selected[provider] {
+			return false
+		}
+	}
+	return true
+}
+
+func warningProviderEnabled(c config.Config, id string) bool {
+	for _, disabled := range c.WarningDisabledProviders {
+		if disabled == id {
+			return false
+		}
+	}
+	return true
+}
+
+func (a *App) pruneDisabledWarningAlerts(c config.Config) error {
+	a.cfgMu.RLock()
+	defer a.cfgMu.RUnlock()
+	if !sameWarningConfig(a.cfg, c) {
+		return nil
+	}
+	a.warningUpdateMu.Lock()
+	defer a.warningUpdateMu.Unlock()
+	providerIDs := map[string]string{"IMGW-PIB": "imgw", "DWD": "dwd", "GeoSphere Austria": "geosphere", warnings.MeteoAlarmSource: "meteoalarm"}
+	items := make([]warnings.Alert, 0)
+	for _, item := range a.history.Warnings() {
+		if providerID, ok := providerIDs[item.Source]; !ok || warningProviderEnabled(c, providerID) {
+			items = append(items, item)
+		}
+	}
+	return a.history.ReconcileWarnings(items)
 }
 
 func (a *App) Handler() http.Handler { return a.security(a.mux) }
@@ -1272,10 +1321,17 @@ func (a *App) stats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c := a.Config()
+	source := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("source")))
+	if source != "" && source != "all" && !validStatsSource(source) {
+		writeError(w, http.StatusBadRequest, "unsupported weather statistics source")
+		return
+	}
 	if err := a.history.Prune(c.HistoryDays); err != nil {
 		log.Printf("prune history for statistics: %v", err)
 	}
 	stats := a.history.StatsExcludingAPRS(c.APRSBlacklist, c.APRSFrameBlacklist)
+	allObservations := filterStatsSource(excludeBlacklistedAPRS(a.history.Observations(c.HistoryDays), c.APRSBlacklist, c.APRSFrameBlacklist), source)
+	stats["observations"] = len(allObservations)
 	chartHistoryDays := c.HistoryDays
 	if requestedHours, err := strconv.Atoi(r.URL.Query().Get("hours")); err == nil && requestedHours > 0 {
 		if requestedHours > 720 {
@@ -1286,8 +1342,8 @@ func (a *App) stats(w http.ResponseWriter, r *http.Request) {
 	if chartHistoryDays > 30 {
 		chartHistoryDays = 30
 	}
-	observations := excludeBlacklistedAPRS(a.history.Observations(chartHistoryDays), c.APRSBlacklist, c.APRSFrameBlacklist)
-	latestReadings := filterExcludedSensorObservations(a.history.LatestByDeviceExcludingAPRS(c.APRSBlacklist, c.APRSFrameBlacklist), c.SensorDevices)
+	observations := filterStatsSource(excludeBlacklistedAPRS(a.history.Observations(chartHistoryDays), c.APRSBlacklist, c.APRSFrameBlacklist), source)
+	latestReadings := filterStatsSource(filterExcludedSensorObservations(a.history.LatestByDeviceExcludingAPRS(c.APRSBlacklist, c.APRSFrameBlacklist), c.SensorDevices), source)
 	stats["quality_counts"] = observationQualityCounts(observations)
 	stats["freshness_counts"] = observationFreshnessCounts(latestReadings, time.Now())
 	for i := range observations {
@@ -1296,6 +1352,29 @@ func (a *App) stats(w http.ResponseWriter, r *http.Request) {
 	stats["history"] = observations
 	writeJSON(w, 200, stats)
 }
+
+func validStatsSource(source string) bool {
+	switch source {
+	case "open-meteo", "aprs", "bme280", "mqtt", "home-assistant", "serial":
+		return true
+	default:
+		return false
+	}
+}
+
+func filterStatsSource(observations []weather.Observation, source string) []weather.Observation {
+	if source == "" || source == "all" {
+		return observations
+	}
+	filtered := make([]weather.Observation, 0, len(observations))
+	for _, observation := range observations {
+		if strings.EqualFold(observation.Source, source) {
+			filtered = append(filtered, observation)
+		}
+	}
+	return filtered
+}
+
 func (a *App) aprsFrames(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		method(w)
@@ -2293,7 +2372,10 @@ func (a *App) fetchWarnings(ctx context.Context) error {
 	results := make(chan providerResult, 3)
 	providers := 0
 
-	imgwApplicable := c.Latitude >= 49 && c.Latitude <= 55.1 && c.Longitude >= 14.1 && c.Longitude <= 24.2
+	imgwApplicable := warningProviderEnabled(c, "imgw") && c.Latitude >= 49 && c.Latitude <= 55.1 && c.Longitude >= 14.1 && c.Longitude <= 24.2
+	if !warningProviderEnabled(c, "imgw") {
+		providerHealth["IMGW-PIB"] = warningProviderHealth{State: "disabled", CheckedAt: now}
+	}
 	if imgwApplicable {
 		providers++
 		go func() {
@@ -2324,7 +2406,10 @@ func (a *App) fetchWarnings(ctx context.Context) error {
 		}()
 	}
 
-	dwdApplicable := c.Latitude >= 47.2 && c.Latitude <= 55.1 && c.Longitude >= 5.5 && c.Longitude <= 15.1
+	dwdApplicable := warningProviderEnabled(c, "dwd") && c.Latitude >= 47.2 && c.Latitude <= 55.1 && c.Longitude >= 5.5 && c.Longitude <= 15.1
+	if !warningProviderEnabled(c, "dwd") {
+		providerHealth["DWD"] = warningProviderHealth{State: "disabled", CheckedAt: now}
+	}
 	if dwdApplicable {
 		providers++
 		go func() {
@@ -2332,7 +2417,10 @@ func (a *App) fetchWarnings(ctx context.Context) error {
 			results <- providerResult{source: "DWD", applicable: true, alerts: activeWarnings(items, now), err: err}
 		}()
 	}
-	geoSphereApplicable := c.Latitude >= 46.3 && c.Latitude <= 49.1 && c.Longitude >= 9.4 && c.Longitude <= 17.2
+	geoSphereApplicable := warningProviderEnabled(c, "geosphere") && c.Latitude >= 46.3 && c.Latitude <= 49.1 && c.Longitude >= 9.4 && c.Longitude <= 17.2
+	if !warningProviderEnabled(c, "geosphere") {
+		providerHealth["GeoSphere Austria"] = warningProviderHealth{State: "disabled", CheckedAt: now}
+	}
 	if geoSphereApplicable {
 		providers++
 		go func() {
@@ -2349,7 +2437,11 @@ func (a *App) fetchWarnings(ctx context.Context) error {
 	// global MeteoAlarm stream remains the warning source. Otherwise require at
 	// least one applicable poller to succeed before replacing stored alerts.
 	providerSucceeded := providers == 0
-	providerHealth[warnings.MeteoAlarmSource] = a.warningProviderHealthSnapshot()[warnings.MeteoAlarmSource]
+	if warningProviderEnabled(c, "meteoalarm") {
+		providerHealth[warnings.MeteoAlarmSource] = a.warningProviderHealthSnapshot()[warnings.MeteoAlarmSource]
+	} else {
+		providerHealth[warnings.MeteoAlarmSource] = warningProviderHealth{State: "disabled", CheckedAt: now}
+	}
 	// MeteoAlarm is a continuously subscribed, global provider. Its current
 	// state comes from the stream worker; the HTTP refresh must not replace it.
 	for i := 0; i < providers; i++ {
@@ -2442,7 +2534,7 @@ func (a *App) meteoAlarmLoop(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		if !a.Config().WarningsEnabled {
+		if c := a.Config(); !c.WarningsEnabled || !warningProviderEnabled(c, "meteoalarm") {
 			a.warningMu.Lock()
 			if a.warningProviders == nil {
 				a.warningProviders = newWarningProviderHealth("waiting", time.Time{})
@@ -2467,7 +2559,7 @@ func (a *App) meteoAlarmLoop(ctx context.Context) {
 				case <-watchCtx.Done():
 					return
 				case <-ticker.C:
-					if !a.Config().WarningsEnabled {
+					if c := a.Config(); !c.WarningsEnabled || !warningProviderEnabled(c, "meteoalarm") {
 						cancel()
 						return
 					}
@@ -2479,7 +2571,7 @@ func (a *App) meteoAlarmLoop(ctx context.Context) {
 				return nil
 			}
 			c := a.Config()
-			if !c.WarningsEnabled {
+			if !c.WarningsEnabled || !warningProviderEnabled(c, "meteoalarm") {
 				return nil
 			}
 			requestCtx, requestCancel := context.WithTimeout(watchCtx, 30*time.Second)
@@ -2501,7 +2593,7 @@ func (a *App) meteoAlarmLoop(ctx context.Context) {
 			}
 			return nil
 		}, func(err error) {
-			if !a.Config().WarningsEnabled {
+			if c := a.Config(); !c.WarningsEnabled || !warningProviderEnabled(c, "meteoalarm") {
 				a.warningMu.Lock()
 				if a.warningProviders == nil {
 					a.warningProviders = newWarningProviderHealth("waiting", time.Time{})

@@ -430,6 +430,40 @@ func TestWarningRepeatIntervalUsesConfiguredSeverity(t *testing.T) {
 	}
 }
 
+func TestWarningProviderSelectionComparisonAndDefaults(t *testing.T) {
+	if !sameWarningProviderSelection([]string{"dwd", "imgw"}, []string{"imgw", "dwd"}) {
+		t.Fatal("provider selection should not depend on checkbox order")
+	}
+	if sameWarningProviderSelection([]string{"dwd"}, []string{"imgw"}) {
+		t.Fatal("different provider selections were treated as equal")
+	}
+	if !warningProviderEnabled(config.Defaults(), "imgw") {
+		t.Fatal("default configuration should keep warning providers enabled")
+	}
+	c := config.Defaults()
+	c.WarningDisabledProviders = []string{"imgw"}
+	if warningProviderEnabled(c, "imgw") || !warningProviderEnabled(c, "dwd") {
+		t.Fatal("disabled provider setting was not applied independently")
+	}
+}
+
+func TestStatisticsSourceFiltering(t *testing.T) {
+	observations := []weather.Observation{
+		{Source: "open-meteo", Parameter: "temperature"},
+		{Source: "bme280", Parameter: "temperature"},
+	}
+	filtered := filterStatsSource(observations, "bme280")
+	if len(filtered) != 1 || filtered[0].Source != "bme280" {
+		t.Fatalf("BME280 filter returned %+v", filtered)
+	}
+	if len(filterStatsSource(observations, "all")) != 2 {
+		t.Fatal("all-sources filter should preserve every reading")
+	}
+	if !validStatsSource("open-meteo") || validStatsSource("unknown") {
+		t.Fatal("statistics source validation is incorrect")
+	}
+}
+
 func TestWarningRefreshKeepsMeteoAlarmWhenLocalAdapterDoesNotCoverStation(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.json")
