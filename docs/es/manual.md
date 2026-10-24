@@ -11,7 +11,7 @@ UltimateWX es un locutor meteorológico local para Linux y estaciones de radioaf
 
 El instalador de versiones admite Raspberry Pi OS, Ubuntu y Alpine Linux en ARMv7, ARM64 y x86-64. Versiones mínimas compatibles: Raspberry Pi OS/Debian 12, Ubuntu 24.04 LTS y Alpine Linux 3.22. Cuando se publique el repositorio, ejecuta el comando del README con permisos de administrador, normalmente mediante `sudo`. El instalador detecta la distribución, la arquitectura y el gestor de servicios, descarga el archivo adecuado, comprueba su suma SHA-256, instala el servicio y activa el inicio automático. En Raspberry Pi OS/Debian y Ubuntu para x86-64/ARM64 instala Piper 1.8.0 en un entorno aislado bajo `/opt/ultimatewx/piper`. En ARMv7 instala una versión experimental de Piper 1.2.0 en el mismo directorio. Alpine no recibe una instalación automática; puedes configurar manualmente un motor compatible con musl en los ajustes avanzados.
 
-En el primer inicio, las credenciales predeterminadas son `admin` / `wx`; puedes cambiarlas inmediatamente escribiendo dos veces la nueva contraseña. El token de `sudo cat /var/lib/ultimatewx/setup-token` es necesario para la configuración remota si eliges otra contraseña inicial o desactivas el inicio de sesión. Marca «Recordarme» para mantener la sesión hasta 30 días. El asistente de estación aparece después de configurar el acceso. Los datos se guardan en `/var/lib/ultimatewx`; incluye esta carpeta en las copias de seguridad porque contiene el hash de la contraseña y secretos de integración.
+En el primer inicio, accede con `admin` / `wx`. En Configuración > Seguridad puedes cambiar la contraseña más adelante o desactivar el inicio de sesión. No hace falta un token de primer inicio. Marca «Recordarme» para mantener la sesión hasta 30 días. El asistente de estación aparece después de iniciar sesión. Los datos se guardan en `/var/lib/ultimatewx`; incluye esta carpeta en las copias de seguridad porque contiene el hash de la contraseña y secretos de integración.
 
 Para ejecutar la versión de desarrollo, instala Go 1.23 o posterior y ejecuta `go run ./cmd/ultimatewx --listen 127.0.0.1:8080`. Los datos de desarrollo se guardan en `./data`.
 
@@ -21,7 +21,7 @@ El panel incluye inglés, polaco, alemán, francés, español e italiano. Puede 
 
 ## Configuración
 
-En el primer inicio, introduce primero el token de configuración de un solo uso y después establece una contraseña o continúa sin iniciar sesión. A continuación aparecerá el asistente de configuración de la estación. Sin contraseña, cualquier persona que pueda acceder al panel puede utilizarlo; use este modo solo en una red local de confianza.
+En el primer inicio, accede con `admin` / `wx`. Más adelante puedes cambiar la contraseña o desactivar el inicio de sesión en **Configuración → Seguridad**. Sin inicio de sesión, cualquier persona que pueda acceder al panel puede utilizarlo; usa este modo solo en una red local de confianza.
 
 La pestaña **Configuración → Aplicación** permite buscar e instalar actualizaciones, además de exportar e importar copias de la configuración. La copia incluye los ajustes de integración, incluidas las contraseñas MQTT y los tokens de Home Assistant, pero no la contraseña del panel ni el historial de mediciones. Guarde el archivo de copia en un lugar seguro.
 

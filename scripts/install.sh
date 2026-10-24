@@ -252,4 +252,4 @@ UNIT
 fi
 
 echo "UltimateWX installed for $DISTRO ($ARCH, $INIT)."
-echo "Open http://<device-ip>:8080. Read the one-time setup token with: sudo cat /var/lib/ultimatewx/setup-token"
+echo "Open http://<device-ip>:8080 and sign in with the default credentials admin / wx. Change the password later in Configuration > Security."

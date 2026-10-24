@@ -14,7 +14,7 @@ Wymagany Go 1.23 lub nowszy.
 go run ./cmd/ultimatewx --listen 127.0.0.1:8080
 ```
 
-Otwórz `http://127.0.0.1:8080`. Przy pierwszym uruchomieniu użyj domyślnych danych `admin` / `wx` albo ustaw inne hasło, wpisując je dwukrotnie. Token `./data/setup-token` jest potrzebny przy zdalnej konfiguracji, jeśli zmieniasz hasło początkowe albo wyłączasz logowanie. Potem możesz przejść przez konfigurator stacji. Dane developerskie trafiają do katalogu `./data`.
+Otwórz `http://127.0.0.1:8080` i zaloguj się danymi `admin` / `wx`. W konfiguracji, w sekcji Bezpieczeństwo, możesz później zmienić hasło albo wyłączyć logowanie. Token pierwszego uruchomienia nie jest wymagany. Potem możesz przejść przez konfigurator stacji. Dane developerskie trafiają do katalogu `./data`.
 
 ## Instalacja wydania
 

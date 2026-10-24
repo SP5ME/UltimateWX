@@ -125,6 +125,19 @@ func New(configPath, dataDir string) (*App, error) {
 	if e != nil {
 		return nil, e
 	}
+	if c.Username == "" {
+		c.Username = "admin"
+	}
+	if c.PasswordHash == "" && !c.AuthDisabled {
+		hash, err := config.HashPassword("wx")
+		if err != nil {
+			return nil, fmt.Errorf("initialize default panel password: %w", err)
+		}
+		c.PasswordHash = hash
+		if err := config.Save(configPath, c); err != nil {
+			return nil, fmt.Errorf("save default panel access: %w", err)
+		}
+	}
 	s, e := store.Open(dataDir)
 	if e != nil {
 		return nil, e

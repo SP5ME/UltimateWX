@@ -28,25 +28,26 @@ func (roundTripper appRoundTripper) RoundTrip(request *http.Request) (*http.Resp
 	return roundTripper(request)
 }
 
-func TestFirstRunSetupProtectsAPIAndDoesNotExposePasswordHash(t *testing.T) {
+func TestFreshInstallUsesDefaultLoginAndDoesNotExposePasswordHash(t *testing.T) {
 	dir := t.TempDir()
-	a, err := New(filepath.Join(dir, "config.json"), filepath.Join(dir, "data"))
+	configPath := filepath.Join(dir, "config.json")
+	a, err := New(configPath, filepath.Join(dir, "data"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	handler := a.Handler()
 	unauth := httptest.NewRecorder()
 	handler.ServeHTTP(unauth, httptest.NewRequest(http.MethodGet, "/api/status", nil))
-	if unauth.Code != http.StatusForbidden {
-		t.Fatalf("status before setup: %d", unauth.Code)
+	if unauth.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated status: %d", unauth.Code)
 	}
-	body := bytes.NewBufferString(`{"password":"ab1234","setup_token":"` + a.setupToken + `"}`)
-	setup := httptest.NewRecorder()
-	handler.ServeHTTP(setup, httptest.NewRequest(http.MethodPost, "/api/setup", body))
-	if setup.Code != 200 {
-		t.Fatalf("setup: %d %s", setup.Code, setup.Body.String())
+	if a.Config().Username != "admin" || !config.VerifyPassword(a.Config().PasswordHash, "wx") {
+		t.Fatal("fresh install did not initialize the default admin / wx credentials")
 	}
-	cookie := setup.Result().Cookies()[0]
+	if _, err := os.Stat(configPath); err != nil {
+		t.Fatalf("default access configuration was not saved: %v", err)
+	}
+	cookie := loginDefaultForTest(t, handler)
 	configResponse := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/config", nil)
 	req.AddCookie(cookie)
@@ -61,6 +62,21 @@ func TestFirstRunSetupProtectsAPIAndDoesNotExposePasswordHash(t *testing.T) {
 	if _, ok := result["password_hash"]; ok {
 		t.Fatal("password hash leaked through config API")
 	}
+}
+
+func loginDefaultForTest(t *testing.T, handler http.Handler) *http.Cookie {
+	t.Helper()
+	login := httptest.NewRecorder()
+	body := bytes.NewBufferString(`{"username":"admin","password":"wx"}`)
+	handler.ServeHTTP(login, httptest.NewRequest(http.MethodPost, "/api/login", body))
+	if login.Code != http.StatusOK {
+		t.Fatalf("default login failed: %d %s", login.Code, login.Body.String())
+	}
+	cookies := login.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("default login did not set a session cookie")
+	}
+	return cookies[0]
 }
 
 func TestAPIResponsesAreNotCached(t *testing.T) {
@@ -85,12 +101,7 @@ func TestConfigurationBackupPreservesPanelCredentialsAndIntegrationSecrets(t *te
 		t.Fatal(err)
 	}
 	handler := a.Handler()
-	setup := httptest.NewRecorder()
-	handler.ServeHTTP(setup, httptest.NewRequest(http.MethodPost, "/api/setup", strings.NewReader(`{"password":"ab1234","setup_token":"`+a.setupToken+`"}`)))
-	if setup.Code != http.StatusOK {
-		t.Fatalf("setup failed: %d %s", setup.Code, setup.Body.String())
-	}
-	cookie := setup.Result().Cookies()[0]
+	cookie := loginDefaultForTest(t, handler)
 	current := a.Config()
 	current.MQTTBroker = "tcp://localhost:1883"
 	current.MQTTUsername = "sensor-user"
@@ -679,12 +690,7 @@ func TestAPRSFrameBlacklistEndpointPersistsAndRemovesFingerprint(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler := a.Handler()
-	setup := httptest.NewRecorder()
-	handler.ServeHTTP(setup, httptest.NewRequest(http.MethodPost, "/api/setup", bytes.NewBufferString(`{"password":"ab1234","setup_token":"`+a.setupToken+`"}`)))
-	if setup.Code != http.StatusOK {
-		t.Fatalf("setup failed: %d %s", setup.Code, setup.Body.String())
-	}
-	cookie := setup.Result().Cookies()[0]
+	cookie := loginDefaultForTest(t, handler)
 	fingerprint := aprs.FrameFingerprint("WX1ABC>APRS:!5230.00N/02100.00E_t020")
 	postBlacklist := func(frameID string, blocked bool) *httptest.ResponseRecorder {
 		payload := `{"frame_id":"` + frameID + `","blocked":` + map[bool]string{true: "true", false: "false"}[blocked] + `}`

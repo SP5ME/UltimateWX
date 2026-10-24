@@ -11,7 +11,7 @@ UltimateWX est un annonceur météo local pour Linux et les stations radioamateu
 
 L’installateur de version prend en charge Raspberry Pi OS, Ubuntu et Alpine Linux en ARMv7, ARM64 et x86-64. Versions minimales prises en charge : Raspberry Pi OS/Debian 12, Ubuntu 24.04 LTS et Alpine Linux 3.22. Après la publication du dépôt, lancez la commande indiquée dans le README avec les droits administrateur, généralement via `sudo`. L’installateur détecte la distribution, l’architecture et le système de services, télécharge l’archive adaptée, vérifie sa somme SHA-256, installe le service et active le démarrage automatique. Sur Raspberry Pi OS/Debian et Ubuntu en x86-64/ARM64, il installe Piper 1.8.0 dans un environnement isolé sous `/opt/ultimatewx/piper`. Sur ARMv7, il installe une version expérimentale Piper 1.2.0 dans le même dossier. Alpine ne reçoit pas d’installation automatique ; un moteur compatible avec musl peut être configuré manuellement dans les paramètres avancés.
 
-Au premier démarrage, les identifiants par défaut sont `admin` / `wx` ; vous pouvez les modifier immédiatement en saisissant deux fois le nouveau mot de passe. Le jeton obtenu avec `sudo cat /var/lib/ultimatewx/setup-token` est nécessaire pour la configuration à distance si vous choisissez un autre mot de passe initial ou désactivez la connexion. Cochez « Rester connecté » pour conserver la session jusqu’à 30 jours. L’assistant de station apparaît après la configuration de l’accès. Les données sont stockées dans `/var/lib/ultimatewx` ; incluez ce dossier dans les sauvegardes, car il contient le hash du mot de passe et les secrets d’intégration.
+Au premier démarrage, connectez-vous avec `admin` / `wx`. Dans Configuration > Sécurité, vous pourrez ensuite modifier le mot de passe ou désactiver la connexion. Aucun jeton de premier démarrage n’est requis. Cochez « Rester connecté » pour conserver la session jusqu’à 30 jours. L’assistant de station apparaît après la connexion. Les données sont stockées dans `/var/lib/ultimatewx` ; incluez ce dossier dans les sauvegardes, car il contient le hash du mot de passe et les secrets d’intégration.
 
 Pour un lancement de développement, installez Go 1.23 ou une version ultérieure et exécutez `go run ./cmd/ultimatewx --listen 127.0.0.1:8080`. Les données de développement sont placées dans `./data`.
 
@@ -21,7 +21,7 @@ Le panneau comprend l’anglais, le polonais, l’allemand, le français, l’es
 
 ## Configuration
 
-Au premier démarrage, saisissez d’abord le jeton de configuration à usage unique, puis définissez un mot de passe ou continuez sans connexion. L’assistant de configuration de la station apparaît ensuite. Sans mot de passe, toute personne pouvant accéder au panneau peut l’utiliser ; réservez ce mode à un réseau local de confiance.
+Au premier démarrage, connectez-vous avec `admin` / `wx`. Vous pourrez ensuite modifier le mot de passe ou désactiver la connexion dans **Configuration → Sécurité**. Sans connexion, toute personne pouvant accéder au panneau peut l’utiliser ; réservez ce mode à un réseau local de confiance.
 
 L’onglet **Configuration → Application** permet de rechercher et d’installer les mises à jour, ainsi que d’exporter et d’importer une sauvegarde de la configuration. Celle-ci contient les paramètres d’intégration, y compris les mots de passe MQTT et les jetons Home Assistant, mais pas le mot de passe du panneau ni l’historique des mesures. Conservez le fichier de sauvegarde en lieu sûr.
 

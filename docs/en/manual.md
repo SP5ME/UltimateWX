@@ -11,7 +11,7 @@ UltimateWX is a local weather announcer for Linux and amateur-radio stations. It
 
 The release installer supports Raspberry Pi OS, Ubuntu and Alpine Linux on ARMv7, ARM64 and x86-64. Minimum supported versions are Raspberry Pi OS/Debian 12, Ubuntu 24.04 LTS and Alpine Linux 3.22. After the repository is published, run the command shown on the project README as root (normally with `sudo`). The installer checks the distribution, CPU architecture and service manager, downloads the matching archive, verifies its SHA-256 checksum, installs the service and enables autostart. On Raspberry Pi OS/Debian and Ubuntu for x86-64/ARM64 it installs Piper 1.8.0 in an isolated environment under `/opt/ultimatewx/piper`. On ARMv7 it installs an experimental Piper 1.2.0 build in the same directory. Alpine does not get an automatic install; a musl-compatible engine can be configured manually in advanced settings. The repository owner in the command must match the published GitHub repository.
 
-On first launch, the default credentials are `admin` / `wx`; you can change them immediately by entering the new password twice. The token from `sudo cat /var/lib/ultimatewx/setup-token` is needed for remote setup if you choose a different initial password or disable login. Select “Remember me” to keep the session for up to 30 days. The station setup wizard appears after access is configured. Data is stored in `/var/lib/ultimatewx`; include it in backups because it contains the password hash and integration secrets.
+On first launch, sign in with `admin` / `wx`. In Configuration > Security, you can change the password later or disable login. No first-run token is needed. Select “Remember me” to keep the session for up to 30 days. The station setup wizard appears after sign-in. Data is stored in `/var/lib/ultimatewx`; include it in backups because it contains the password hash and integration secrets.
 
 ### Uninstalling
 
@@ -25,7 +25,7 @@ The panel includes English, Polish, German, French, Spanish and Italian. Add ano
 
 ## Configuration
 
-On first launch, the station setup wizard appears before panel access is configured. After setup, you can set a password or continue without login. Without a password, anyone who can reach the panel can use it; use this mode only on a trusted local network.
+On first launch, sign in with `admin` / `wx`. You can change the password or disable login later in **Configuration → Security**. Without login, anyone who can reach the panel can use it; use this mode only on a trusted local network.
 
 The **Configuration → Application** tab contains update checking and installation, plus configuration backup export and import. The backup includes integration settings, including MQTT passwords and Home Assistant tokens, but excludes the panel password and measurement history. Store the backup file securely.
 
