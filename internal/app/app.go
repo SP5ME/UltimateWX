@@ -64,7 +64,7 @@ type App struct {
 	voices              *tts.Service
 	snapshot            weather.Snapshot
 	snapMu              sync.RWMutex
-	sessions            map[string]time.Time
+	sessions            map[string]sessionState
 	sessionMu           sync.Mutex
 	loginAttemptMu      sync.Mutex
 	loginAttempts       map[string]loginAttemptState
@@ -85,6 +85,16 @@ type loginAttemptState struct {
 	Attempts     int
 	BlockedUntil time.Time
 }
+
+type sessionState struct {
+	ExpiresAt time.Time     `json:"expires_at"`
+	Duration  time.Duration `json:"duration"`
+}
+
+const (
+	standardSessionDuration   = 12 * time.Hour
+	rememberedSessionDuration = 30 * 24 * time.Hour
+)
 
 type sourceHealth struct {
 	LastAttemptAt time.Time `json:"last_attempt_at,omitempty"`
@@ -123,7 +133,11 @@ func New(configPath, dataDir string) (*App, error) {
 	if e != nil {
 		return nil, e
 	}
-	a := &App{configPath: configPath, dataDir: dataDir, cfg: c, history: s, voices: tts.New(filepath.Join(dataDir, "voices")), sessions: map[string]time.Time{}, loginAttempts: map[string]loginAttemptState{}, mux: http.NewServeMux(), warningRefresh: make(chan struct{}, 1), setupToken: setupToken, sourceHealth: map[string]sourceHealth{}, warningProviders: newWarningProviderHealth("waiting", time.Time{})}
+	sessions, sessionErr := loadSessions(filepath.Join(dataDir, "sessions.json"))
+	if sessionErr != nil {
+		log.Printf("load remembered sessions: %v", sessionErr)
+	}
+	a := &App{configPath: configPath, dataDir: dataDir, cfg: c, history: s, voices: tts.New(filepath.Join(dataDir, "voices")), sessions: sessions, loginAttempts: map[string]loginAttemptState{}, mux: http.NewServeMux(), warningRefresh: make(chan struct{}, 1), setupToken: setupToken, sourceHealth: map[string]sourceHealth{}, warningProviders: newWarningProviderHealth("waiting", time.Time{})}
 	a.routes()
 	return a, nil
 }
@@ -688,18 +702,21 @@ func (a *App) setupAccess(next http.HandlerFunc) http.HandlerFunc {
 func (a *App) validSession(token string) bool {
 	a.sessionMu.Lock()
 	defer a.sessionMu.Unlock()
-	expiry, ok := a.sessions[token]
+	key := sessionKey(token)
+	state, ok := a.sessions[key]
 	if !ok {
 		return false
 	}
-	if time.Now().After(expiry) {
-		delete(a.sessions, token)
+	if !time.Now().Before(state.ExpiresAt) {
+		delete(a.sessions, key)
+		if err := a.persistSessionsLocked(); err != nil {
+			log.Printf("persist expired session removal: %v", err)
+		}
 		return false
 	}
-	a.sessions[token] = time.Now().Add(12 * time.Hour)
 	return true
 }
-func (a *App) newSession(w http.ResponseWriter) bool {
+func (a *App) newSession(w http.ResponseWriter, remember bool) bool {
 	b := make([]byte, 32)
 	if _, e := rand.Read(b); e != nil {
 		http.Error(w, "session error", 500)
@@ -707,15 +724,22 @@ func (a *App) newSession(w http.ResponseWriter) bool {
 	}
 	token := base64.RawURLEncoding.EncodeToString(b)
 	now := time.Now()
+	duration := standardSessionDuration
+	if remember {
+		duration = rememberedSessionDuration
+	}
 	a.sessionMu.Lock()
-	for existing, expiry := range a.sessions {
-		if !expiry.After(now) {
+	for existing, state := range a.sessions {
+		if !state.ExpiresAt.After(now) {
 			delete(a.sessions, existing)
 		}
 	}
-	a.sessions[token] = now.Add(12 * time.Hour)
+	a.sessions[sessionKey(token)] = sessionState{ExpiresAt: now.Add(duration), Duration: duration}
+	if err := a.persistSessionsLocked(); err != nil {
+		log.Printf("persist login session: %v", err)
+	}
 	a.sessionMu.Unlock()
-	http.SetCookie(w, &http.Cookie{Name: "ultimatewx_session", Value: token, Path: "/", HttpOnly: true, Secure: rIsTLS(w), SameSite: http.SameSiteStrictMode, MaxAge: 43200})
+	http.SetCookie(w, &http.Cookie{Name: "ultimatewx_session", Value: token, Path: "/", HttpOnly: true, Secure: rIsTLS(w), SameSite: http.SameSiteStrictMode, MaxAge: int(duration.Seconds()), Expires: now.Add(duration)})
 	return true
 }
 func rIsTLS(w http.ResponseWriter) bool { return false }
@@ -725,8 +749,18 @@ func (a *App) authState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c := a.Config()
-	writeJSON(w, 200, map[string]any{"setup_required": c.PasswordHash == "" && !c.AuthDisabled, "authentication_disabled": c.AuthDisabled})
+	writeJSON(w, 200, map[string]any{"setup_required": c.PasswordHash == "" && !c.AuthDisabled, "authentication_disabled": c.AuthDisabled, "local_setup_allowed": isLoopbackRequest(r)})
 }
+
+func isLoopbackRequest(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(strings.Trim(host, "[]"))
+	return ip != nil && ip.IsLoopback()
+}
+
 func (a *App) setup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		method(w)
@@ -740,8 +774,10 @@ func (a *App) setup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
+		Username     string   `json:"username"`
 		SetupToken   string   `json:"setup_token"`
 		Password     string   `json:"password"`
+		RememberMe   bool     `json:"remember_me"`
 		DisableAuth  bool     `json:"disable_auth"`
 		LocationName string   `json:"location_name"`
 		Latitude     *float64 `json:"latitude"`
@@ -751,7 +787,10 @@ func (a *App) setup(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if len(a.setupToken) < 32 || subtle.ConstantTimeCompare([]byte(req.SetupToken), []byte(a.setupToken)) != 1 {
+	validToken := len(a.setupToken) >= 32 && subtle.ConstantTimeCompare([]byte(req.SetupToken), []byte(a.setupToken)) == 1
+	localSetup := isLoopbackRequest(r)
+	defaultCredentialSetup := req.Username == "admin" && req.Password == "wx"
+	if !validToken && !localSetup && !defaultCredentialSetup {
 		writeError(w, http.StatusForbidden, "invalid first-run setup token")
 		return
 	}
@@ -765,6 +804,7 @@ func (a *App) setup(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"ok": true, "authentication_disabled": true})
 		return
 	}
+	c.Username = "admin"
 	hash, e := config.HashPassword(req.Password)
 	if e != nil {
 		writeError(w, 400, e.Error())
@@ -789,7 +829,7 @@ func (a *App) setup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.finishSetupToken()
-	if !a.newSession(w) {
+	if !a.newSession(w, req.RememberMe) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": true})
@@ -815,18 +855,24 @@ func (a *App) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Password string `json:"password"`
+		Username   string `json:"username"`
+		Password   string `json:"password"`
+		RememberMe bool   `json:"remember_me"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
 	}
 	c := a.Config()
-	if c.AuthDisabled || !config.VerifyPassword(c.PasswordHash, req.Password) {
+	username := c.Username
+	if username == "" {
+		username = "admin"
+	}
+	if c.AuthDisabled || req.Username != username || !config.VerifyPassword(c.PasswordHash, req.Password) {
 		a.recordLoginFailure(client, now)
 		writeError(w, 401, "invalid password")
 		return
 	}
-	if !a.newSession(w) {
+	if !a.newSession(w, req.RememberMe) {
 		return
 	}
 	a.clearLoginFailures(client)
@@ -918,7 +964,10 @@ func (a *App) logout(w http.ResponseWriter, r *http.Request) {
 	}
 	if c, e := r.Cookie("ultimatewx_session"); e == nil {
 		a.sessionMu.Lock()
-		delete(a.sessions, c.Value)
+		delete(a.sessions, sessionKey(c.Value))
+		if err := a.persistSessionsLocked(); err != nil {
+			log.Printf("persist logout: %v", err)
+		}
 		a.sessionMu.Unlock()
 	}
 	http.SetCookie(w, &http.Cookie{Name: "ultimatewx_session", Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: -1})
@@ -988,10 +1037,13 @@ func (a *App) securitySettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.sessionMu.Lock()
-	a.sessions = make(map[string]time.Time)
+	a.sessions = make(map[string]sessionState)
+	if err := a.persistSessionsLocked(); err != nil {
+		log.Printf("persist security change: %v", err)
+	}
 	a.sessionMu.Unlock()
 	if !c.AuthDisabled {
-		if !a.newSession(w) {
+		if !a.newSession(w, false) {
 			return
 		}
 	}

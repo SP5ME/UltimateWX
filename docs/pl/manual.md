@@ -11,7 +11,7 @@ UltimateWX to lokalna pogodynka dla Linuksa i stacji krótkofalarskiej. Łączy 
 
 Instalator wydania obsługuje Raspberry Pi OS, Ubuntu i Alpine Linux na ARMv7, ARM64 oraz x86-64. Minimalna wersja to Raspberry Pi OS/Debian 12, Ubuntu 24.04 LTS lub Alpine Linux 3.22. Po opublikowaniu repozytorium uruchom polecenie z README z uprawnieniami administratora (zwykle przez `sudo`). Instalator sprawdza dystrybucję, architekturę procesora i system usług, pobiera właściwe archiwum, weryfikuje sumę SHA-256, instaluje usługę i włącza autostart. Na Raspberry Pi OS/Debian i Ubuntu dla x86-64/ARM64 instaluje Piper 1.8.0 w `/opt/ultimatewx/piper` jako osobne środowisko Pythona. Na ARMv7 instaluje eksperymentalne wydanie Piper 1.2.0 w tym samym katalogu. Alpine nie otrzymuje instalacji automatycznej; można skonfigurować zgodny z musl silnik ręcznie w ustawieniach zaawansowanych.
 
-Otwórz w sieci lokalnej adres `http://<adres-urzadzenia>:8080`. Przy pierwszym uruchomieniu odczytaj jednorazowy token poleceniem `sudo cat /var/lib/ultimatewx/setup-token` i wpisz go w panelu, zanim ustawisz hasło (co najmniej 6 znaków) albo wybierzesz pracę bez logowania. Konfigurator stacji pojawi się po zabezpieczeniu dostępu. Konfiguracja i historia są przechowywane w `/var/lib/ultimatewx`. Uwzględnij ten katalog w kopii zapasowej — zawiera hash hasła i dane dostępowe do integracji.
+Przy pierwszym uruchomieniu domyślne dane logowania to `admin` / `wx`; możesz je zmienić od razu, wpisując nowe hasło dwukrotnie. Token z `sudo cat /var/lib/ultimatewx/setup-token` jest potrzebny przy zdalnej konfiguracji, jeśli wybierzesz inne hasło początkowe albo wyłączysz logowanie. Zaznacz „Zapamiętaj mnie”, aby zachować sesję do 30 dni. Konfigurator stacji pojawi się po ustawieniu dostępu. Dane są w `/var/lib/ultimatewx`; uwzględnij ten katalog w kopii zapasowej, bo zawiera hash hasła i sekrety integracji.
 
 ### Odinstalowanie
 
@@ -25,7 +25,7 @@ Panel zawiera języki angielski, polski, niemiecki, francuski, hiszpański i wł
 
 ## Konfiguracja
 
-Przy pierwszym uruchomieniu konfigurator stacji pojawia się przed ustawieniem dostępu do panelu. Po konfiguracji możesz ustawić hasło albo wybrać pracę bez logowania. Tryb bez hasła pozwala każdej osobie mającej dostęp do panelu korzystać z niego; używaj go tylko w zaufanej sieci lokalnej.
+Przy pierwszym uruchomieniu użyj domyślnych danych `admin` / `wx` albo zmień hasło, wpisując je dwukrotnie. Token jest potrzebny przy konfiguracji zdalnej, jeśli zmieniasz hasło początkowe albo wyłączasz logowanie; z tego samego komputera możesz pominąć logowanie bez tokenu. Tryb bez hasła pozwala każdej osobie mającej dostęp do panelu korzystać z niego; używaj go tylko w zaufanej sieci lokalnej.
 
 Zakładka **Konfiguracja → Aplikacja** zawiera sprawdzanie i instalowanie aktualizacji oraz eksport i import kopii konfiguracji. Kopia obejmuje ustawienia integracji wraz z hasłami MQTT i tokenami Home Assistant, ale nie zawiera hasła panelu ani historii pomiarów. Przechowuj plik kopii w bezpiecznym miejscu.
 

@@ -354,13 +354,13 @@ func TestLoginRejectsWrongPassword(t *testing.T) {
 		t.Fatal(err)
 	}
 	rr := httptest.NewRecorder()
-	a.Handler().ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/login", bytes.NewBufferString(`{"password":"not-the-password"}`)))
+	a.Handler().ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/login", bytes.NewBufferString(`{"username":"admin","password":"not-the-password"}`)))
 	if rr.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", rr.Code)
 	}
 }
 
-func TestLoginAcceptsSixCharacterPassword(t *testing.T) {
+func TestLoginAcceptsPassword(t *testing.T) {
 	dir := t.TempDir()
 	a, err := New(filepath.Join(dir, "config.json"), filepath.Join(dir, "data"))
 	if err != nil {
@@ -375,7 +375,7 @@ func TestLoginAcceptsSixCharacterPassword(t *testing.T) {
 		t.Fatal(err)
 	}
 	rr := httptest.NewRecorder()
-	a.Handler().ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/login", bytes.NewBufferString(`{"password":"ab1234"}`)))
+	a.Handler().ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/login", bytes.NewBufferString(`{"username":"admin","password":"ab1234"}`)))
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
 	}

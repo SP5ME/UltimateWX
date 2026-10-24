@@ -29,12 +29,12 @@ func TestDefaultsAndValidation(t *testing.T) {
 }
 
 func TestPasswordHashAndConfigRoundTrip(t *testing.T) {
-	if _, err := HashPassword("12345"); err == nil {
-		t.Fatal("expected a five-character password to be rejected")
+	if _, err := HashPassword(""); err == nil {
+		t.Fatal("expected an empty password to be rejected")
 	}
-	shortHash, err := HashPassword("123456")
-	if err != nil || !VerifyPassword(shortHash, "123456") {
-		t.Fatalf("six-character password should be accepted: %v", err)
+	shortHash, err := HashPassword("wx")
+	if err != nil || !VerifyPassword(shortHash, "wx") {
+		t.Fatalf("short default password should be accepted: %v", err)
 	}
 	hash, err := HashPassword("long-test-password")
 	if err != nil {

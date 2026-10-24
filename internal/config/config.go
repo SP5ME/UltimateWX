@@ -45,6 +45,7 @@ type SensorDeviceConfig struct {
 }
 
 type Config struct {
+	Username                 string                        `json:"username,omitempty"`
 	PasswordHash             string                        `json:"password_hash,omitempty"`
 	AuthDisabled             bool                          `json:"auth_disabled,omitempty"`
 	Latitude                 float64                       `json:"latitude"`
@@ -95,7 +96,7 @@ type Config struct {
 }
 
 func Defaults() Config {
-	return Config{Latitude: 0, Longitude: 0, LocationName: "", Timezone: DefaultTimezone, Units: "metric", Locale: "", APRSRadiusKM: 10, WarningsEnabled: true, WarningRepeat1: 60, WarningRepeat2: 30, WarningRepeat3: 15, WeatherSource: "auto", APRSPort: 8001, I2CDevice: "/dev/i2c-1", I2CAddress: 0x76,
+	return Config{Username: "admin", Latitude: 0, Longitude: 0, LocationName: "", Timezone: DefaultTimezone, Units: "metric", Locale: "", APRSRadiusKM: 10, WarningsEnabled: true, WarningRepeat1: 60, WarningRepeat2: 30, WarningRepeat3: 15, WeatherSource: "auto", APRSPort: 8001, I2CDevice: "/dev/i2c-1", I2CAddress: 0x76,
 		MQTTTopic: "ultimatewx/+/weather", SerialBaud: 9600, HistoryDays: 7, AudioVolume: 100,
 		Schedules: []Schedule{{Time: "07:00"}, {Time: "12:00"}, {Time: "18:00"}},
 		Blocks: []Block{{ID: "greeting", Enabled: true, Title: "Powitanie", Kind: "text", Text: "Komunikat pogodowy UltimateWX."},
@@ -325,8 +326,8 @@ func Validate(c Config) error {
 	return nil
 }
 func HashPassword(p string) (string, error) {
-	if utf8.RuneCountInString(p) < 6 {
-		return "", errors.New("hasło musi mieć co najmniej 6 znaków")
+	if utf8.RuneCountInString(p) == 0 {
+		return "", errors.New("hasło nie może być puste")
 	}
 	salt := make([]byte, 16)
 	if _, e := rand.Read(salt); e != nil {
