@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -125,66 +127,71 @@ func PlayWAV(ctx context.Context, path, device string) error {
 	return nil
 }
 
-// TestOutput plays a short tone without depending on the TTS engine or a voice model.
-func TestOutput(ctx context.Context, device string, volume int) error {
-	if volume < 0 || volume > 100 {
-		return fmt.Errorf("audio volume must be 0..100 percent")
+// StartTestTone starts a continuous, fixed-level 1 kHz tone. The returned
+// cancel function stops playback; done receives the player result exactly once.
+func StartTestTone(ctx context.Context, device string) (context.CancelFunc, <-chan error, error) {
+	args := make([]string, 0, 10)
+	if strings.TrimSpace(device) != "" {
+		args = append(args, "-D", device)
 	}
-	f, err := os.CreateTemp("", "ultimatewx-audio-test-*.wav")
+	args = append(args, "-q", "-t", "raw", "-f", "S16_LE", "-r", "16000", "-c", "1", "-")
+	ctx, cancel := context.WithCancel(ctx)
+	cmd := exec.CommandContext(ctx, "aplay", args...)
+	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return fmt.Errorf("create audio test WAV: %w", err)
+		cancel()
+		return nil, nil, fmt.Errorf("aplay stdin: %w", err)
 	}
-	path := f.Name()
-	defer os.Remove(path)
-
-	const sampleRate = 16000
-	const duration = 600 * time.Millisecond
-	samples := int(float64(sampleRate) * duration.Seconds())
-	dataSize := samples * 2
-	header := make([]byte, 44)
-	copy(header[0:4], "RIFF")
-	binary.LittleEndian.PutUint32(header[4:8], uint32(36+dataSize))
-	copy(header[8:12], "WAVEfmt ")
-	binary.LittleEndian.PutUint32(header[16:20], 16)
-	binary.LittleEndian.PutUint16(header[20:22], 1)
-	binary.LittleEndian.PutUint16(header[22:24], 1)
-	binary.LittleEndian.PutUint32(header[24:28], sampleRate)
-	binary.LittleEndian.PutUint32(header[28:32], sampleRate*2)
-	binary.LittleEndian.PutUint16(header[32:34], 2)
-	binary.LittleEndian.PutUint16(header[34:36], 16)
-	copy(header[36:40], "data")
-	binary.LittleEndian.PutUint32(header[40:44], uint32(dataSize))
-	if _, err := f.Write(header); err != nil {
-		f.Close()
-		return fmt.Errorf("write audio test WAV header: %w", err)
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		cancel()
+		return nil, nil, fmt.Errorf("start aplay: %w", err)
 	}
-	for i := 0; i < samples; i++ {
-		// Fade the tone in and out to avoid clicks on playback.
-		envelope := math.Min(1, math.Min(float64(i)/400, float64(samples-1-i)/400))
-		value := int16(math.Sin(2*math.Pi*440*float64(i)/sampleRate) * 6000 * envelope)
-		if err := binary.Write(f, binary.LittleEndian, value); err != nil {
-			f.Close()
-			return fmt.Errorf("write audio test WAV data: %w", err)
+	done := make(chan error, 1)
+	var stopOnce sync.Once
+	stop := func() { stopOnce.Do(cancel) }
+	go func() {
+		const sampleRate = 16000
+		const chunkSamples = 1600
+		const amplitude = 6000
+		buffer := make([]byte, chunkSamples*2)
+		phase := 0
+		var streamErr error
+		for {
+			select {
+			case <-ctx.Done():
+				streamErr = ctx.Err()
+				goto finished
+			default:
+			}
+			for i := 0; i < chunkSamples; i++ {
+				value := int16(math.Sin(2*math.Pi*1000*float64(phase)/float64(sampleRate)) * amplitude)
+				binary.LittleEndian.PutUint16(buffer[i*2:], uint16(value))
+				phase = (phase + 1) % sampleRate
+			}
+			if _, err := stdin.Write(buffer); err != nil {
+				streamErr = err
+				break
+			}
 		}
-	}
-	if err := f.Sync(); err != nil {
-		f.Close()
-		return fmt.Errorf("flush audio test WAV: %w", err)
-	}
-	if err := f.Close(); err != nil {
-		return fmt.Errorf("close audio test WAV: %w", err)
-	}
-	info, err := os.Stat(path)
-	if err != nil || info.Size() != int64(44+dataSize) {
-		if err != nil {
-			return fmt.Errorf("verify audio test WAV: %w", err)
+	finished:
+		_ = stdin.Close()
+		waitErr := cmd.Wait()
+		if waitErr != nil {
+			detail := strings.TrimSpace(stderr.String())
+			if detail != "" {
+				waitErr = fmt.Errorf("aplay: %w: %s", waitErr, detail)
+			} else {
+				waitErr = fmt.Errorf("aplay: %w", waitErr)
+			}
+		} else if streamErr != nil && !errors.Is(streamErr, context.Canceled) {
+			waitErr = fmt.Errorf("write test tone: %w", streamErr)
 		}
-		return fmt.Errorf("verify audio test WAV: incomplete file (%d bytes)", info.Size())
-	}
-	if err := setWAVVolume(path, volume); err != nil {
-		return fmt.Errorf("prepare audio test WAV: %w", err)
-	}
-	return PlayWAV(ctx, path, device)
+		done <- waitErr
+		close(done)
+	}()
+	return stop, done, nil
 }
 
 func Speak(ctx context.Context, text, model, engine, device string, volume int) error {

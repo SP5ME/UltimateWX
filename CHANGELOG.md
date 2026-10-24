@@ -4,6 +4,12 @@ W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na 
 
 ## [Unreleased]
 
+## [0.0.6-prealpha.24] - 2026-10-24
+
+### Ulepszone
+- Test wyjścia audio włącza ciągły ton 1 kHz i zatrzymuje go przyciskiem; nie wymaga silnika Piper.
+- Test wyjścia pokazuje stan odtwarzania, synchronizuje się po odświeżeniu strony i kończy się przy zmianie urządzenia lub zamknięciu aplikacji.
+
 ## [0.0.6-prealpha.18] - 2026-10-23
 
 ### Naprawione

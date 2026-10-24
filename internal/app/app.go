@@ -43,6 +43,11 @@ type App struct {
 	cfgMu               sync.RWMutex
 	history             *store.Store
 	speechMu            sync.Mutex
+	audioTestMu         sync.Mutex
+	audioTestCancel     context.CancelFunc
+	audioTestDone       chan struct{}
+	audioTestDevice     string
+	audioTestError      string
 	warningMu           sync.RWMutex
 	warningUpdateMu     sync.Mutex
 	warningError        string
@@ -581,6 +586,7 @@ func (a *App) Run(ctx context.Context) {
 	go a.meteoAlarmLoop(ctx)
 	go a.warningSpeakLoop(ctx)
 	<-ctx.Done()
+	a.stopAudioOutputTest()
 }
 func (a *App) weatherLoop(ctx context.Context) {
 	ticker := time.NewTicker(15 * time.Minute)
@@ -1751,14 +1757,47 @@ func (a *App) testAudioInput(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) testAudioOutput(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		a.audioTestMu.Lock()
+		active, device, message := a.audioTestCancel != nil, a.audioTestDevice, a.audioTestError
+		a.audioTestMu.Unlock()
+		writeJSON(w, http.StatusOK, map[string]any{"active": active, "device": device, "error": message})
+		return
+	}
 	if r.Method != http.MethodPost {
 		method(w)
 		return
 	}
 	var request struct {
+		Action string `json:"action"`
 		Device string `json:"device"`
 	}
 	if !decodeJSON(w, r, &request) {
+		return
+	}
+	if request.Action == "" {
+		request.Action = "start"
+	}
+	if request.Action == "stop" {
+		done, stop := a.stopAudioOutputTestLocked()
+		if stop == nil {
+			a.audioTestMu.Unlock()
+			writeJSON(w, http.StatusOK, map[string]bool{"ok": true, "active": false})
+			return
+		}
+		stop()
+		a.audioTestMu.Unlock()
+		select {
+		case <-done:
+		case <-time.After(3 * time.Second):
+			writeError(w, http.StatusGatewayTimeout, "Audio test did not stop in time.")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true, "active": false})
+		return
+	}
+	if request.Action != "start" {
+		writeError(w, http.StatusBadRequest, "Invalid audio test action.")
 		return
 	}
 	request.Device = strings.TrimSpace(request.Device)
@@ -1766,7 +1805,6 @@ func (a *App) testAudioOutput(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid audio output device.")
 		return
 	}
-	c := a.Config()
 	if request.Device != "" {
 		available := false
 		for _, device := range audio.List().Outputs {
@@ -1780,16 +1818,96 @@ func (a *App) testAudioOutput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
+	a.audioTestMu.Lock()
+	if a.audioTestCancel != nil {
+		activeDevice := a.audioTestDevice
+		a.audioTestMu.Unlock()
+		if activeDevice == request.Device {
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true, "active": true, "device": activeDevice})
+		} else {
+			writeError(w, http.StatusConflict, "Stop the active audio test before changing the output device.")
+		}
+		return
+	}
+	a.audioTestMu.Unlock()
 	a.speechMu.Lock()
-	err := audio.TestOutput(ctx, request.Device, c.AudioVolume)
-	a.speechMu.Unlock()
+	a.audioTestMu.Lock()
+	if a.audioTestCancel != nil {
+		activeDevice := a.audioTestDevice
+		a.audioTestMu.Unlock()
+		a.speechMu.Unlock()
+		if activeDevice == request.Device {
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true, "active": true, "device": activeDevice})
+		} else {
+			writeError(w, http.StatusConflict, "Stop the active audio test before changing the output device.")
+		}
+		return
+	}
+	a.audioTestMu.Unlock()
+	ctx, cancel := context.WithCancel(context.Background())
+	stopTone, playerDone, err := audio.StartTestTone(ctx, request.Device)
 	if err != nil {
+		cancel()
+		a.speechMu.Unlock()
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	select {
+	case err := <-playerDone:
+		cancel()
+		a.speechMu.Unlock()
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+		} else {
+			writeError(w, http.StatusBadGateway, "Audio test stopped unexpectedly.")
+		}
+		return
+	case <-time.After(150 * time.Millisecond):
+	}
+	done := make(chan struct{})
+	a.audioTestMu.Lock()
+	a.audioTestCancel = stopTone
+	a.audioTestDone = done
+	a.audioTestDevice = request.Device
+	a.audioTestError = ""
+	a.audioTestMu.Unlock()
+	go func() {
+		err := <-playerDone
+		a.speechMu.Unlock()
+		a.audioTestMu.Lock()
+		if a.audioTestDone == done {
+			a.audioTestCancel = nil
+			a.audioTestDone = nil
+			a.audioTestDevice = ""
+			if err != nil && !errors.Is(err, context.Canceled) {
+				a.audioTestError = err.Error()
+			}
+		}
+		close(done)
+		a.audioTestMu.Unlock()
+	}()
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "active": true, "device": request.Device})
+}
+
+// stopAudioOutputTestLocked returns with audioTestMu held so callers can
+// cancel the process without racing a newly started test.
+func (a *App) stopAudioOutputTestLocked() (chan struct{}, context.CancelFunc) {
+	a.audioTestMu.Lock()
+	return a.audioTestDone, a.audioTestCancel
+}
+
+func (a *App) stopAudioOutputTest() {
+	done, stop := a.stopAudioOutputTestLocked()
+	if stop == nil {
+		a.audioTestMu.Unlock()
+		return
+	}
+	stop()
+	a.audioTestMu.Unlock()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+	}
 }
 
 func (a *App) ttsCatalog(w http.ResponseWriter, r *http.Request) {
