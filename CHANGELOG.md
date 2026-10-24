@@ -2,6 +2,11 @@
 
 W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), a wersje na [Semantic Versioning](https://semver.org/).
 
+## [0.0.6-prealpha.26] - 2026-10-24
+
+### Zmienione
+- Instalator dołącza Piper w `/opt/ultimatewx/piper` również na Alpine Linux i przerywa instalację, jeśli silnik nie przejdzie kontroli uruchomienia.
+
 ## [Unreleased]
 
 ## [0.0.6-prealpha.25] - 2026-10-24

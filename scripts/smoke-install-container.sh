@@ -91,6 +91,9 @@ fi
 sh /scripts/install.sh
 test -x /opt/ultimatewx/ultimatewx
 /opt/ultimatewx/ultimatewx --help >/dev/null
+if [ -r /etc/alpine-release ]; then
+  test -x /opt/ultimatewx/piper/piper
+fi
 sh /scripts/install.sh
 if [ "$INIT" = systemd ]; then
   test -s /etc/systemd/system/ultimatewx.service

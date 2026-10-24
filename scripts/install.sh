@@ -120,37 +120,72 @@ install_piper() {
   # Keep the app-managed engine in one predictable directory. A system Piper
   # remains untouched and can still be used as a fallback by the application.
   if [ -x "$PIPER_DIR/piper" ]; then
-    echo "UltimateWX Piper is already installed under $PIPER_DIR."
-    return
+    if "$PIPER_DIR/piper" --help >/dev/null 2>&1; then
+      echo "UltimateWX Piper is already installed under $PIPER_DIR."
+      return
+    fi
+    echo "Piper exists under $PIPER_DIR but failed its startup check; UltimateWX was not installed." >&2
+    exit 1
   fi
   if [ -x "$PIPER_DIR/bin/piper" ] && "$PIPER_DIR/bin/python" -m pip show piper-tts >/dev/null 2>&1; then
-    echo "UltimateWX Piper is already installed under $PIPER_DIR."
-    return
+    if "$PIPER_DIR/bin/piper" --help >/dev/null 2>&1; then
+      echo "UltimateWX Piper is already installed under $PIPER_DIR."
+      return
+    fi
+    echo "Piper exists under $PIPER_DIR but failed its startup check; UltimateWX was not installed." >&2
+    exit 1
   fi
 
   case "$DISTRO:$ARCH" in
     alpine:*)
-      echo "Piper was not installed automatically on Alpine (musl); install a Piper build compatible with musl libc and set its path in the application."
+      case "$ARCH" in
+        amd64) PIPER_APK_ARCH=x86_64 ;;
+        arm64) PIPER_APK_ARCH=aarch64 ;;
+        armv7) PIPER_APK_ARCH=armhf ;;
+      esac
+      PIPER_ASSET="piper_alpine_$PIPER_APK_ARCH.tar.gz"
+      if ! curl -fsSL "$BASE/$PIPER_ASSET" -o "$TMP/$PIPER_ASSET"; then
+        echo "Piper for Alpine ($ARCH) is missing from this release; UltimateWX was not installed." >&2
+        exit 1
+      fi
+      if ! verify_checksum "$PIPER_ASSET" "$TMP/SHA256SUMS"; then
+        echo "Piper for Alpine checksum verification failed; UltimateWX was not installed." >&2
+        exit 1
+      fi
+      if ! tar -tzf "$TMP/$PIPER_ASSET" | grep -q '^piper/piper$'; then
+        echo "Piper for Alpine has an unexpected package layout; UltimateWX was not installed." >&2
+        exit 1
+      fi
+      tar -xzf "$TMP/$PIPER_ASSET" -C /opt/ultimatewx
+      if [ ! -x "$PIPER_DIR/piper" ] || ! "$PIPER_DIR/piper" --help >/dev/null 2>&1; then
+        echo "Piper for Alpine was extracted but failed its startup check; UltimateWX was not installed." >&2
+        exit 1
+      fi
+      echo "Installed Alpine-compatible Piper under $PIPER_DIR."
       return
       ;;
     *:armv7)
       PIPER_ASSET=piper_armv7.tar.gz
       if ! curl -fsSL "$BASE/$PIPER_ASSET" -o "$TMP/$PIPER_ASSET"; then
-        echo "Piper was not installed automatically: this release has no experimental ARMv7 build."
-        return
+        echo "Piper was not installed automatically: this release has no experimental ARMv7 build." >&2
+        exit 1
       fi
       if ! verify_checksum "$PIPER_ASSET" "$TMP/SHA256SUMS"; then
-        echo "Piper ARMv7 package checksum verification failed; it was not installed."
-        return
+        echo "Piper ARMv7 package checksum verification failed; it was not installed." >&2
+        exit 1
       fi
       if ! tar -tzf "$TMP/$PIPER_ASSET" | grep -q '^piper/piper$'; then
-        echo "Piper ARMv7 package has an unexpected layout; it was not installed."
-        return
+        echo "Piper ARMv7 package has an unexpected layout; it was not installed." >&2
+        exit 1
       fi
       tar -xzf "$TMP/$PIPER_ASSET" -C /opt/ultimatewx
       if [ ! -x "$PIPER_DIR/piper" ]; then
-        echo "Piper ARMv7 package was extracted, but its executable is missing or not executable."
-        return
+        echo "Piper ARMv7 package was extracted, but its executable is missing or not executable." >&2
+        exit 1
+      fi
+      if ! "$PIPER_DIR/piper" --help >/dev/null 2>&1; then
+        echo "Piper ARMv7 was extracted but failed its startup check; UltimateWX was not installed." >&2
+        exit 1
       fi
       echo "Installed experimental Piper 1.2.0 ARMv7 build from source. Test speech performance on this Raspberry Pi model."
       return
@@ -158,21 +193,21 @@ install_piper() {
   esac
 
   if ! command -v apt-get >/dev/null 2>&1; then
-    echo "Piper was not installed automatically: apt-get is unavailable."
-    return
+    echo "Piper installation requires apt-get on this distribution; UltimateWX was not installed." >&2
+    exit 1
   fi
   if ! apt-get update || ! DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-venv; then
-    echo "Piper was not installed automatically: Python 3 and venv could not be installed."
-    return
+    echo "Piper installation failed: Python 3 and venv could not be installed; UltimateWX was not installed." >&2
+    exit 1
   fi
   if ! python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 9))'; then
-    echo "Piper was not installed automatically: Python 3.9 or newer is required."
-    return
+    echo "Piper installation requires Python 3.9 or newer; UltimateWX was not installed." >&2
+    exit 1
   fi
 
   if ! install -d -o root -g root -m 0755 "$PIPER_DIR" || ! python3 -m venv "$PIPER_DIR"; then
-    echo "Piper installation failed under $PIPER_DIR; UltimateWX will still start, but speech output needs Piper installed separately."
-    return
+    echo "Piper installation failed under $PIPER_DIR; UltimateWX was not installed." >&2
+    exit 1
   fi
   if [ -x "$PIPER_DIR/bin/piper" ]; then
     if "$PIPER_DIR/bin/python" -m pip install --disable-pip-version-check --only-binary=:all: --force-reinstall "piper-tts==$PIPER_VERSION"; then PIPER_INSTALL_OK=yes
@@ -182,8 +217,12 @@ install_piper() {
     else PIPER_INSTALL_OK=no; fi
   fi
   if [ "$PIPER_INSTALL_OK" != yes ] || [ ! -x "$PIPER_DIR/bin/piper" ]; then
-    echo "Piper installation failed under $PIPER_DIR; UltimateWX will still start, but speech output needs Piper installed separately."
-    return
+    echo "Piper installation failed under $PIPER_DIR; UltimateWX was not installed." >&2
+    exit 1
+  fi
+  if ! "$PIPER_DIR/bin/piper" --help >/dev/null 2>&1; then
+    echo "Piper was installed under $PIPER_DIR but failed its startup check; UltimateWX was not installed." >&2
+    exit 1
   fi
   echo "Installed Piper TTS $PIPER_VERSION under $PIPER_DIR."
 }

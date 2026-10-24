@@ -28,7 +28,7 @@ jobs:
       - name: Validate shell scripts and locale example
         if: matrix.goarch == 'amd64'
         run: |
-          for script in scripts/install.sh scripts/uninstall.sh scripts/smoke-install-container.sh; do
+          for script in scripts/install.sh scripts/uninstall.sh scripts/smoke-install-container.sh scripts/piper-alpine-wrapper.sh; do
             sh -n "$script"
           done
           python3 -m json.tool examples/locales/nl.json >/dev/null
@@ -71,9 +71,12 @@ jobs:
         if: matrix.goarch == 'amd64'
         run: |
           fixture="$RUNNER_TEMP/ultimatewx-install-fixture"
-          mkdir -p "$fixture"
+          mkdir -p "$fixture/piper"
           tar -C . -czf "$fixture/ultimatewx_linux_amd64.tar.gz" ultimatewx
-          (cd "$fixture" && sha256sum ultimatewx_linux_amd64.tar.gz > SHA256SUMS)
+          printf '#!/bin/sh\nexit 0\n' > "$fixture/piper/piper"
+          chmod 0755 "$fixture/piper/piper"
+          tar -C "$fixture" -czf "$fixture/piper_alpine_x86_64.tar.gz" piper
+          (cd "$fixture" && sha256sum ultimatewx_linux_amd64.tar.gz piper_alpine_x86_64.tar.gz > SHA256SUMS)
           docker run --rm \
             -v "$fixture:/fixtures:ro" \
             -v "$GITHUB_WORKSPACE/scripts:/scripts:ro" \
@@ -129,6 +132,52 @@ jobs:
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+      - name: Package Alpine Piper for all supported architectures
+        run: |
+          mkdir -p dist
+          while read -r apk_arch platform; do
+            docker run --rm --platform "$platform" \
+              -e APK_ARCH="$apk_arch" \
+              -v "$PWD/dist:/release" \
+              -v "$PWD/scripts/piper-alpine-wrapper.sh:/tmp/piper-wrapper.sh:ro" \
+              alpine:edge sh -ec '
+                root=/tmp/piper
+                mkdir -p "$root/etc/apk/keys"
+                cp -a /etc/apk/keys/. "$root/etc/apk/keys/"
+                apk --root "$root" --initdb --no-cache \
+                  --keys-dir /etc/apk/keys \
+                  --repository https://dl-cdn.alpinelinux.org/alpine/edge/main \
+                  --repository https://dl-cdn.alpinelinux.org/alpine/edge/community \
+                  --repository https://dl-cdn.alpinelinux.org/alpine/edge/testing \
+                  add piper-tts
+                install -m 0755 /tmp/piper-wrapper.sh "$root/piper"
+                "$root/piper" --help >/dev/null
+                rm -rf "$root/etc/apk" "$root/var/cache/apk" "$root/lib/apk/db"
+                tar -C /tmp -czf "/release/piper_alpine_${APK_ARCH}.tar.gz" piper
+                tar -tzf "/release/piper_alpine_${APK_ARCH}.tar.gz" | grep -q "^piper/piper$"
+              '
+          done <<'ARCHES'
+          x86_64 linux/amd64
+          aarch64 linux/arm64
+          armhf linux/arm/v7
+          ARCHES
+          (cd dist && sha256sum piper_alpine_*.tar.gz > PIPER-ALPINE-SHA256SUMS)
+          while read -r apk_arch platform; do
+            for alpine_version in 3.22 3.24; do
+              docker run --rm --platform "$platform" \
+                -e APK_ARCH="$apk_arch" \
+                -v "$PWD/dist:/release:ro" \
+                "alpine:$alpine_version" sh -ec '
+                  mkdir -p /opt/ultimatewx
+                  tar -xzf "/release/piper_alpine_${APK_ARCH}.tar.gz" -C /opt/ultimatewx
+                  /opt/ultimatewx/piper/piper --help >/dev/null
+                '
+            done
+          done <<'ARCHES'
+          x86_64 linux/amd64
+          aarch64 linux/arm64
+          armhf linux/arm/v7
+          ARCHES
       - name: Build Piper 1.2.0 for ARMv7 from source
         run: |
           git clone --depth 1 --branch v1.2.0 https://github.com/rhasspy/piper.git piper-src
@@ -313,13 +362,13 @@ jobs:
           for language in en pl de fr es it; do
             tar -tzf dist/USER-DOCUMENTATION.tar.gz | grep -q "^docs/$language/manual.md\$"
           done
-          (cd dist && sha256sum ultimatewx_linux_*.tar.gz USER-DOCUMENTATION.tar.gz piper_armv7.tar.gz PIPER-ARMV7-LICENSE.md PIPER-ARMV7-SOURCES.tar.gz install.sh uninstall.sh > SHA256SUMS)
+          (cd dist && sha256sum ultimatewx_linux_*.tar.gz USER-DOCUMENTATION.tar.gz piper_armv7.tar.gz piper_alpine_*.tar.gz PIPER-ALPINE-SHA256SUMS PIPER-ARMV7-LICENSE.md PIPER-ARMV7-SOURCES.tar.gz install.sh uninstall.sh > SHA256SUMS)
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           PDF_REVIEWED: ${{ steps.translations.outputs.reviewed }}
         run: |
-          assets=(dist/ultimatewx_linux_*.tar.gz dist/USER-DOCUMENTATION.tar.gz dist/piper_armv7.tar.gz dist/PIPER-ARMV7-SOURCES.tar.gz dist/SHA256SUMS dist/install.sh dist/uninstall.sh dist/LICENSE dist/LICENSING.md dist/PIPER-ARMV7-LICENSE.md dist/PIPER-ARMV7-SHA256SUMS dist/LICENSES/Apache-2.0.txt)
+          assets=(dist/ultimatewx_linux_*.tar.gz dist/USER-DOCUMENTATION.tar.gz dist/piper_armv7.tar.gz dist/piper_alpine_*.tar.gz dist/PIPER-ALPINE-SHA256SUMS dist/PIPER-ARMV7-SOURCES.tar.gz dist/SHA256SUMS dist/install.sh dist/uninstall.sh dist/LICENSE dist/LICENSING.md dist/PIPER-ARMV7-LICENSE.md dist/PIPER-ARMV7-SHA256SUMS dist/LICENSES/Apache-2.0.txt)
           if [ "$PDF_REVIEWED" = "true" ]; then
             assets+=(dist/docs/*.pdf)
           fi
