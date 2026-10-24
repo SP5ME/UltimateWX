@@ -4,6 +4,11 @@ W tym pliku zapisujemy istotne zmiany dla użytkowników. Format opiera się na 
 
 ## [Unreleased]
 
+## [0.0.6-prealpha.25] - 2026-10-24
+
+### Naprawione
+- Usunięto wyciek kontekstu w obsłudze ciągłego testu audio, który blokował `go vet` w CI.
+
 ## [0.0.6-prealpha.24] - 2026-10-24
 
 ### Ulepszone

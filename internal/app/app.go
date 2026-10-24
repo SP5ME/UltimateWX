@@ -1844,17 +1844,15 @@ func (a *App) testAudioOutput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.audioTestMu.Unlock()
-	ctx, cancel := context.WithCancel(context.Background())
-	stopTone, playerDone, err := audio.StartTestTone(ctx, request.Device)
+	stopTone, playerDone, err := audio.StartTestTone(context.Background(), request.Device)
 	if err != nil {
-		cancel()
 		a.speechMu.Unlock()
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
 	select {
 	case err := <-playerDone:
-		cancel()
+		stopTone()
 		a.speechMu.Unlock()
 		if err != nil {
 			writeError(w, http.StatusBadGateway, err.Error())
