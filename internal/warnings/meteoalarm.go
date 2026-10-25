@@ -58,12 +58,13 @@ func (p MeteoAlarm) Watch(ctx context.Context, handler func(topic string, payloa
 	for ctx.Err() == nil {
 		broker := brokers[brokerIndex%len(brokers)]
 		brokerIndex++
+		connectedAt := time.Time{}
 		conn, err := mqtt.ConnectWithQoS(broker, clientID, "everyone", "everyone", topic, 1)
 		if err == nil {
+			connectedAt = time.Now()
 			if state != nil {
 				state(nil)
 			}
-			backoff = time.Second
 			connectionDone := make(chan struct{})
 			go func(connection net.Conn) {
 				select {
@@ -83,6 +84,12 @@ func (p MeteoAlarm) Watch(ctx context.Context, handler func(topic string, payloa
 			state(err)
 		}
 		log.Printf("MeteoAlarm WIS2 stream: %v", err)
+		// Reset the retry delay only after a stable connection. A broker that
+		// accepts MQTT and immediately drops the stream must not cause a tight
+		// reconnect loop.
+		if !connectedAt.IsZero() && time.Since(connectedAt) >= time.Minute {
+			backoff = time.Second
+		}
 		timer := time.NewTimer(backoff)
 		select {
 		case <-ctx.Done():
